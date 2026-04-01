@@ -254,8 +254,26 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
           .replace(/\\u003d/g, "=")
           .replace(/\\u002F/gi, "/")
           .replace(/\\&/g, "&")
-          .replace(/\\\//g, "/");
+          .replace(/\\\//g, "/")
+          .replace(/&amp;/g, "&");
       }
+    }
+
+    const videoUrlMatches = [
+      ...text.matchAll(/"name":"[^"]+","url":"(https:[^"]+)"/gi),
+      ...text.matchAll(/"url":"(https:[^"]+)","name":"[^"]+"/gi),
+      ...text.matchAll(/&quot;name&quot;:&quot;[^"]+&quot;,&quot;url&quot;:&quot;(https:[^"]+)&quot;/gi),
+      ...text.matchAll(/&quot;url&quot;:&quot;(https:[^"]+)&quot;,&quot;name&quot;:&quot;[^"]+&quot;/gi)
+    ];
+
+    if (videoUrlMatches.length) {
+      return videoUrlMatches[videoUrlMatches.length - 1][1]
+        .replace(/\\u0026/g, "&")
+        .replace(/\\u003d/g, "=")
+        .replace(/\\u002F/gi, "/")
+        .replace(/\\&/g, "&")
+        .replace(/\\\//g, "/")
+        .replace(/&amp;/g, "&");
     }
 
     return null;
