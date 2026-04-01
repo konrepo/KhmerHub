@@ -26,10 +26,10 @@ module.exports = Object.freeze({
   },
 
   phumi2: {
-	pageSize: 12, 
+    pageSize: 12,
     baseUrl: "https://www.phumikhmer1.club/"
-  }, 
-  
+  },
+
   khmerave: {
     ...albumSite,
     baseUrl: "https://www.khmeravenue.com/album"
@@ -39,7 +39,7 @@ module.exports = Object.freeze({
     ...albumSite,
     baseUrl: "https://www.khmerdrama.com/album"
   },
-  
+
   idrama: {
     ...defaultSite,
     baseUrl: "https://www.idramahd.com",
@@ -47,6 +47,10 @@ module.exports = Object.freeze({
     titleSelector: "h3.entry-title a",
     posterSelector: ".archive-thumb img",
     posterAttrs: ["data-src", "src"]
-  }
+  },
 
+  cat3movie: {
+    pageSize: 40,
+    baseUrl: "https://www.cat3movie.club"
+  }
 });

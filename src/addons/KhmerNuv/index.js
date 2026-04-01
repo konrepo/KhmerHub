@@ -1,5 +1,3 @@
-// index.js
-
 const { addonBuilder } = require("stremio-addon-sdk");
 const manifest = require("./manifest");
 const DEBUG = false;
@@ -7,6 +5,8 @@ const DEBUG = false;
 const engine = require("./sites/engine");
 const khmerave = require("./sites/khmerave");
 const phumi2 = require("./sites/phumi2");
+const cat3movie = require("./sites/cat3movie");
+
 const PAGE_TRACKER = new Map();
 const PAGE_URL_CACHE = new Map();
 
@@ -42,7 +42,8 @@ const ENGINES = {
   idrama: engine,
   khmerave,
   merlkon: khmerave,
-  phumi2
+  phumi2,
+  cat3movie
 };
 
 function getSiteEngine(id) {
@@ -61,20 +62,18 @@ const builder = new addonBuilder(manifest);
 ========================= */
 builder.defineCatalogHandler(async ({ id, extra }) => {
   try {
-	let cacheKey;
-	// Phumi2 uses normalized paging → custom cache key later
-	if (id !== "phumi2") {
-	  cacheKey = `catalog:${id}:${JSON.stringify(extra || {})}`;
+    let cacheKey;
+
+    // Phumi2 uses normalized paging -> custom cache key later
+    if (id !== "phumi2" && id !== "cat3movie") {
+      cacheKey = `catalog:${id}:${JSON.stringify(extra || {})}`;
       const cached = CATALOG_CACHE.get(cacheKey);
       if (cached) return cached;
-	}  
-	
-	const ctx = getSiteEngine(id);
-	if (DEBUG) console.log("CATALOG HANDLER DEBUG:", {
-	  id,
-	  extra
-	});
-	
+    }
+
+    const ctx = getSiteEngine(id);
+    if (DEBUG) console.log("CATALOG HANDLER DEBUG:", { id, extra });
+
     if (!ctx) return { metas: [] };
 
     const { site, engine: siteEngine } = ctx;
@@ -88,7 +87,6 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
         : `https://www.khmeravenue.com/?s=${keyword}`;
 
       const items = await siteEngine.getCatalogItems(id, site, url);
-
       const fixed = applyMetaId(items, id);
 
       const result = { metas: mapMetas(fixed, TYPE) };
@@ -105,17 +103,13 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
       const skip = Number(extra?.skip || 0);
 
       const startPage =
-        Math.floor(skip / SKIP_STEP) *
-          PAGES_PER_BATCH +
-        1;
+        Math.floor(skip / SKIP_STEP) * PAGES_PER_BATCH + 1;
 
       const base = String(site.baseUrl || "").replace(/\/$/, "");
       const pages = [];
 
       for (let p = startPage; p < startPage + PAGES_PER_BATCH; p++) {
-        const url =
-          p === 1 ? `${base}/` : `${base}/page/${p}/`;
-
+        const url = p === 1 ? `${base}/` : `${base}/page/${p}/`;
         pages.push(siteEngine.getCatalogItems(id, site, url));
       }
 
@@ -125,20 +119,20 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
       if (!allItems.length) return { metas: [] };
 
       const uniq = uniqById(allItems);
-
       const fixed = applyMetaId(uniq, id);
 
-	  const result = {
-	     metas: mapMetas(
-		   fixed.slice(0, WEBSITE_PAGE_SIZE * PAGES_PER_BATCH),
-		   TYPE
-	     ),
-	     cacheMaxAge: 3600
-	  };
-	  CATALOG_CACHE.set(cacheKey, result);
-	  return result;
+      const result = {
+        metas: mapMetas(
+          fixed.slice(0, WEBSITE_PAGE_SIZE * PAGES_PER_BATCH),
+          TYPE
+        ),
+        cacheMaxAge: 3600
+      };
+
+      CATALOG_CACHE.set(cacheKey, result);
+      return result;
     }
-	
+
     // SundayDrama (Blogger): search + paging
     if (id === "sunday") {
       const base = String(site.baseUrl || "").replace(/\/$/, "");
@@ -149,8 +143,6 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 
       const skip = Number(extra?.skip || 0);
       const SKIP_STEP = 100;
-
-      // how many pages to skip
       const steps = Math.floor(skip / SKIP_STEP);
 
       const headers = {
@@ -160,7 +152,6 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
         Accept: "text/html"
       };
 
-      // walk pages using "older" links
       for (let i = 0; i < steps && url; i++) {
         const { data } = await axiosClient.get(url, { headers });
         const $ = cheerio.load(data);
@@ -173,7 +164,6 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
         url = older ? older : null;
       }
 
-      // now fetch current page
       let allItems = [];
 
       if (url) {
@@ -233,7 +223,7 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
       const WEBSITE_PAGE_SIZE = site.pageSize || 12;
 
       const skip = Number(extra?.skip || 0);
-	  const rawTargetPage = Math.floor(skip / WEBSITE_PAGE_SIZE) + 1;
+      const rawTargetPage = Math.floor(skip / WEBSITE_PAGE_SIZE) + 1;
 
       const pageKeyBase = `phumi2:${id}:${extra?.search || ""}`;
       const lastPage = PAGE_TRACKER.get(pageKeyBase) || 1;
@@ -259,7 +249,6 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
         Referer: `${base}/`,
       };
 
-      // reuse nearest cached page URL
       let resumePage = 1;
 
       for (let p = targetPage; p >= 1; p--) {
@@ -273,29 +262,11 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 
       currentPage = resumePage;
 
-      // always cache page 1 start URL
       if (!PAGE_URL_CACHE.has(`${pageKeyBase}:page:1`)) {
         PAGE_URL_CACHE.set(`${pageKeyBase}:page:1`, startUrl);
       }
 
-      if (DEBUG) console.log("CATALOG DEBUG:", {
-        id,
-        skip,
-        rawTargetPage,
-        targetPage,
-        lastPage,
-        resumePage,
-        url
-      });
-
-      // move to requested page
       while (currentPage < targetPage && url) {
-        if (DEBUG) console.log("PHUMI2 WALK:", {
-          currentPage,
-          targetPage,
-          url
-        });
-
         const { data } = await axiosClient.get(url, { headers });
         const nextUrl = siteEngine.getNextPageUrl(base, data);
 
@@ -307,10 +278,8 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
         currentPage++;
       }
 
-      // load current page only
       if (url) {
         PAGE_URL_CACHE.set(`${pageKeyBase}:page:${targetPage}`, url);
-
         const items = await siteEngine.getCatalogItems(id, site, url);
         allItems.push(...items);
       }
@@ -318,18 +287,47 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
       const uniq = uniqById(allItems);
       const fixed = applyMetaId(uniq, id);
 
-      if (DEBUG) console.log("PHUMI2 CATALOG RESULT:", {
-        count: fixed.length,
-        firstMeta: fixed[0]?.id || null,
-        firstUrl: fixed[0] || null
-      });
-
       const result = {
         metas: mapMetas(fixed, TYPE),
         cacheMaxAge: 3600
       };
 
       PAGE_TRACKER.set(pageKeyBase, targetPage);
+      CATALOG_CACHE.set(cacheKey, result);
+      return result;
+    }
+
+    // Cat3Movie: custom next-page pagination
+    if (id === "cat3movie") {
+      const base = String(site.baseUrl || "").replace(/\/$/, "");
+      const SKIP_STEP = 100;
+
+      const skip = Number(extra?.skip || 0);
+      const targetPage = Math.floor(skip / SKIP_STEP) + 1;
+
+      cacheKey = `catalog:${id}:${extra?.search || ""}:page:${targetPage}`;
+
+      const cached = CATALOG_CACHE.get(cacheKey);
+      if (cached) return cached;
+
+      const url = extra?.search
+        ? targetPage === 1
+          ? `${base}/?s=${encodeURIComponent(extra.search)}`
+          : `${base}/page/${targetPage}/?s=${encodeURIComponent(extra.search)}`
+        : targetPage === 1
+          ? `${base}/`
+          : `${base}/page/${targetPage}/`;
+
+      const items = await siteEngine.getCatalogItems(id, site, url);
+      if (!items.length) return { metas: [] };
+
+      const fixed = applyMetaId(items, id);
+
+      const result = {
+        metas: mapMetas(fixed, "movie"),
+        cacheMaxAge: 3600
+      };
+
       CATALOG_CACHE.set(cacheKey, result);
       return result;
     }
@@ -342,17 +340,13 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
     const skip = Number(extra?.skip || 0);
 
     const startPage =
-      Math.floor(skip / SKIP_STEP) *
-        PAGES_PER_BATCH +
-      1;
+      Math.floor(skip / SKIP_STEP) * PAGES_PER_BATCH + 1;
 
     const base = String(site.baseUrl || "").replace(/\/$/, "");
     const pages = [];
 
     for (let p = startPage; p < startPage + PAGES_PER_BATCH; p++) {
-      const url =
-        p === 1 ? `${base}/` : `${base}/page/${p}/`;
-
+      const url = p === 1 ? `${base}/` : `${base}/page/${p}/`;
       pages.push(siteEngine.getCatalogItems(id, site, url));
     }
 
@@ -390,6 +384,7 @@ builder.defineMetaHandler(async ({ id }) => {
 
     const parts = id.split(":");
     const prefix = parts[0];
+    const metaType = prefix === "cat3movie" ? "movie" : TYPE;
 
     const ctx = getSiteEngine(prefix);
     if (!ctx) return { meta: null };
@@ -444,29 +439,36 @@ builder.defineMetaHandler(async ({ id }) => {
     EP_CACHE.set(id, episodes);
 
     const first = episodes[0];
+    const cleanName = (first.title || "KhmerDub")
+      .replace(/\[.*?\]/g, "")
+      .replace(/-\s*$/, "")
+      .trim();
 
     return {
       meta: {
         id,
-        type: TYPE,
-        name: (first.title || "KhmerDub")
-          .replace(/\[.*?\]/g, "")
-          .replace(/-\s*$/, "")
-          .trim(),
-        description: (first.title || "KhmerDub")
-          .replace(/\[.*?\]/g, ""),
+        type: metaType,
+        name: cleanName,
+        description: (first.title || "KhmerDub").replace(/\[.*?\]/g, ""),
         poster: first.thumbnail,
         background: first.thumbnail,
-        videos: episodes.map((ep) => ({
-          id: `${id}:${ep.episode}`,
-          title: ep.title || `Episode ${ep.episode}`,
-          description: `Episode ${ep.episode}`,
-          season: 1,
-          episode: ep.episode,
-          thumbnail: ep.thumbnail
-        })),
+        videos: prefix === "cat3movie"
+          ? [{
+              id: `${id}:1`,
+              title: cleanName,
+              description: cleanName,
+              thumbnail: first.thumbnail
+            }]
+          : episodes.map((ep) => ({
+              id: `${id}:${ep.episode}`,
+              title: ep.title || `Episode ${ep.episode}`,
+              description: `Episode ${ep.episode}`,
+              season: 1,
+              episode: ep.episode,
+              thumbnail: ep.thumbnail
+            })),
       },
-    };
+    };;
   } catch (err) {
     console.error("meta error:", err);
     return { meta: null };

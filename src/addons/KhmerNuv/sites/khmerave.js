@@ -176,6 +176,8 @@ function normalizeOkUrl(url) {
 }
 
 function tryExtractVideoCandidateFromKhmerAvenue(html) {
+  if (!html) return null;
+
   const b64 = html.match(/Base64\.decode\("(.+?)"\)/i);
   if (b64?.[1]) {
     try {
@@ -197,43 +199,102 @@ function tryExtractVideoCandidateFromKhmerAvenue(html) {
     if (m?.[1]) return m[1];
   }
 
+  const playerListMatch = html.match(/player_list\s*=\s*(\[[\s\S]*?\]);/i);
+  if (playerListMatch?.[1]) {
+    try {
+      const cleaned = playerListMatch[1].replace(/,\s*]/g, "]");
+      const list = JSON.parse(cleaned);
+      const first = Array.isArray(list) ? list[0] : null;
+      if (first?.file) return first.file;
+    } catch {}
+  }
+
+  const externalOk = html.match(/https?:\/\/m\.ok\.ru\/video\/\d+/i);
+  if (externalOk?.[0]) return externalOk[0];
+
   return null;
 }
 
 async function resolveOkRuToDirect(iframeUrl, ua) {
-  try {
-    const okUrl = normalizeOkUrl(iframeUrl);
+  function getOkId(url) {
+    const m =
+      String(url).match(/ok\.ru\/videoembed\/(\d+)/i) ||
+      String(url).match(/ok\.ru\/video\/(\d+)/i) ||
+      String(url).match(/m\.ok\.ru\/video\/(\d+)/i);
+    return m ? m[1] : null;
+  }
 
-    const okRes = await axios.get(okUrl, {
-      headers: {
-        "User-Agent": ua,
-        Referer: "https://ok.ru/",
-      },
-      timeout: 15000,
-    });
+  function extractDirect(html) {
+    let text = String(html || "");
 
-    let html = String(okRes.data || "");
-
-    html = html
+    text = text
       .replace(/\\&quot;/g, '"')
       .replace(/&quot;/g, '"')
       .replace(/\\u0026/g, "&")
+      .replace(/\\u003d/g, "=")
+      .replace(/\\u002F/gi, "/")
       .replace(/\\&/g, "&")
       .replace(/\\\//g, "/");
 
     const patterns = [
-      /"ondemandHls"\s*:\s*"([^"]+)/,
-      /"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)/,
-      /"hlsManifestUrl"\s*:\s*"([^"]+)/,
-      /"(https:[^"]+\.m3u8[^"]*)"/,
+      /"ondemandHls"\s*:\s*"([^"]+)"/i,
+      /"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)"/i,
+      /"hlsManifestUrl"\s*:\s*"([^"]+)"/i,
+      /"master[mM]3u8Url"\s*:\s*"([^"]+)"/i,
+      /"(https:[^"]+\.m3u8[^"]*)"/i,
+      /(https:\/\/[^"'\\\s]+\.m3u8[^"'\\\s]*)/i,
     ];
 
     for (const re of patterns) {
-      const m = html.match(re);
-      if (m?.[1]) {
-        return m[1]
+      const m = text.match(re);
+      const found = m?.[1];
+      if (found) {
+        return found
           .replace(/\\u0026/g, "&")
-          .replace(/\\&/g, "&");
+          .replace(/\\u003d/g, "=")
+          .replace(/\\u002F/gi, "/")
+          .replace(/\\&/g, "&")
+          .replace(/\\\//g, "/");
+      }
+    }
+
+    return null;
+  }
+
+  try {
+    const original = String(iframeUrl || "").trim();
+    const normalized = normalizeOkUrl(original);
+    const id = getOkId(original);
+
+    const urlsToTry = [];
+
+    if (original) urlsToTry.push(original);
+    if (normalized && normalized !== original) urlsToTry.push(normalized);
+
+    if (id) {
+      urlsToTry.push(`https://ok.ru/videoembed/${id}`);
+      urlsToTry.push(`https://ok.ru/video/${id}`);
+      urlsToTry.push(`https://m.ok.ru/video/${id}`);
+    }
+
+    const uniqueUrls = [...new Set(urlsToTry)];
+
+    for (const okUrl of uniqueUrls) {
+      try {
+        const okRes = await axios.get(okUrl, {
+          headers: {
+            "User-Agent": ua,
+            Referer: "https://ok.ru/",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
+          timeout: 15000,
+        });
+
+        const direct = extractDirect(okRes.data);
+        if (direct) return direct;
+      } catch (err) {
+        console.error("OK resolver try failed:", okUrl, err.message);
       }
     }
 
