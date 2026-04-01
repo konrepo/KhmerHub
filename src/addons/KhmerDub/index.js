@@ -311,17 +311,19 @@ builder.defineStreamHandler(async ({ id }) => {
     if (!ctx) return { streams: [] };
 
     const { engine: siteEngine } = ctx;
-
     const seriesUrl = decodeURIComponent(encodedUrl);
 
-    const streams = await siteEngine.getStream(prefix, seriesUrl, epNum);
-    if (!streams) return { streams: [] };
+    const stream = await siteEngine.getStream(prefix, seriesUrl, epNum);
+    if (!stream) return { streams: [] };
 
-    return { streams };
-
-  } catch {
+    return {
+      streams: Array.isArray(stream) ? stream : [stream]
+    };
+  } catch (err) {
+    console.error("[defineStreamHandler]", err);
     return { streams: [] };
   }
+  
 });
 
 module.exports = builder.getInterface();

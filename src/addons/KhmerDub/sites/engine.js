@@ -598,7 +598,7 @@ async function getStream(prefix, seriesUrl, episode) {
     const url = links[episode - 1];
     if (!url) return null;
 
-    return buildStream(url, episode, undefined, providerName, groupName);
+    return buildStream(url, episode, undefined, providerName, groupName, seriesUrl);
   }
 
   if (!postId) return null;
@@ -643,7 +643,7 @@ async function getStream(prefix, seriesUrl, episode) {
     url = resolved;
   }
 
-  return buildStream(url, episode, undefined, providerName, groupName);
+  return buildStream(url, episode, undefined, providerName, groupName, seriesUrl);
 }
 
 /* =========================

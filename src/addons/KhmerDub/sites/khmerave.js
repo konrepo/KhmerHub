@@ -222,14 +222,32 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
       .replace(/\\&/g, "&")
       .replace(/\\\//g, "/");
 
+    const debugKeys = [
+      "ondemandHls",
+      "hlsMasterPlaylistUrl",
+      "hlsManifestUrl",
+      "metadataUrl",
+      "master.m3u8",
+      ".m3u8",
+      "videoSrc",
+      "flashvars",
+      "data-options",
+      "playerOptions",
+      "metadata"
+    ];
+
     let match = null;
 
     const patterns = [
-      /"ondemandHls"\s*:\s*"([^"]+)/,
-      /"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)/,
-      /"hlsManifestUrl"\s*:\s*"([^"]+)/,
-      /"metadataUrl"\s*:\s*"(https:[^"]+\.m3u8[^"]*)"/,
-      /"(https:[^"]+\.m3u8[^"]*)"/
+      /"ondemandHls"\s*:\s*"([^"]+)"/i,
+      /"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)"/i,
+      /"hlsManifestUrl"\s*:\s*"([^"]+)"/i,
+      /"metadataUrl"\s*:\s*"(https:[^"]+)"/i,
+      /"videoSrc"\s*:\s*"(https:[^"]+\.m3u8[^"]*)"/i,
+      /"(https:\/\/[^"]+master\.m3u8[^"]*)"/i,
+      /"(https:\/\/[^"]+\.m3u8[^"]*)"/i,
+      /playerOptions.*?(https:\/\/[^"' ]+\.m3u8[^"' ]*)/i,
+      /metadata.*?(https:\/\/[^"' ]+\.m3u8[^"' ]*)/i
     ];
 
     for (const re of patterns) {
@@ -241,12 +259,68 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
     }
 
     if (!match || !match[1]) {
+      const videoUrlMatches = [
+        ...html.matchAll(/"name":"[^"]+","url":"(https:[^"]+)"/gi),
+        ...html.matchAll(/"url":"(https:[^"]+)","name":"[^"]+"/gi),
+        ...html.matchAll(/&quot;name&quot;:&quot;[^"]+&quot;,&quot;url&quot;:&quot;(https:[^"]+)&quot;/gi),
+        ...html.matchAll(/&quot;url&quot;:&quot;(https:[^"]+)&quot;,&quot;name&quot;:&quot;[^"]+&quot;/gi)
+      ];
+
+      if (videoUrlMatches.length) {
+        const directUrl = videoUrlMatches[videoUrlMatches.length - 1][1]
+          .replace(/\\u0026/g, "&")
+          .replace(/\\&/g, "&")
+          .replace(/\\\//g, "/")
+          .replace(/&amp;/g, "&");
+
+        return directUrl;
+      }
+
       return null;
     }
 
     const cleanUrl = match[1]
       .replace(/\\u0026/g, "&")
       .replace(/\\&/g, "&");
+
+    // If this is a metadata URL, fetch real m3u8
+    if (/metadata/i.test(cleanUrl) && /^https?:\/\//i.test(cleanUrl)) {
+      try {
+        const metaRes = await axios.get(cleanUrl, {
+          headers: {
+            "User-Agent": ua,
+            "Referer": "https://ok.ru/"
+          },
+          timeout: 15000
+        });
+
+        let metaText = metaRes.data;
+        if (typeof metaText !== "string") {
+          metaText = JSON.stringify(metaText);
+        }
+
+        metaText = metaText
+          .replace(/\\u0026/g, "&")
+          .replace(/\\&/g, "&")
+          .replace(/\\\//g, "/");
+
+        const metaMatch =
+          metaText.match(/"ondemandHls"\s*:\s*"([^"]+)"/i) ||
+          metaText.match(/"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)"/i) ||
+          metaText.match(/"(https:\/\/[^"]+\.m3u8[^"]*)"/i);
+
+        if (metaMatch?.[1]) {
+          const finalUrl = metaMatch[1]
+            .replace(/\\u0026/g, "&")
+            .replace(/\\&/g, "&")
+            .replace(/\\\//g, "/");
+
+          return finalUrl;
+        }
+      } catch (e) {
+        console.error("OK metadata resolver error:", e.response?.status || e.message);
+      }
+    }
 
     return cleanUrl;
 
@@ -307,7 +381,9 @@ async function getStream(prefix, seriesUrl, episode) {
     const cand = normalizeOkUrl(candidate);
 
     if (cand.includes("ok.ru")) {
+	  
       const direct = await resolveOkRuToDirect(cand, UA_MOB);
+	  
       if (!direct) return null;
 
       return {

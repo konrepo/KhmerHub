@@ -54,7 +54,14 @@ async function resolveOkEmbed(embedUrl) {
 /* =========================
    BUILD STREAM
 ========================= */
-function buildStream(url, episode, title, name = "KhmerDub", group = "khmerdub") {
+function buildStream(
+  url,
+  episode,
+  title,
+  name = "KhmerDub",
+  group = "khmerdub",
+  referer = null
+) {
   const isOk = /ok\.ru|okcdn\.ru/i.test(url);
 
   return {
@@ -72,7 +79,17 @@ function buildStream(url, episode, title, name = "KhmerDub", group = "khmerdub")
             }
           }
         }
-      : { group }
+      : referer
+        ? {
+            group,
+            proxyHeaders: {
+              request: {
+                Referer: referer,
+                "User-Agent": "Mozilla/5.0"
+              }
+            }
+          }
+        : { group }
   };
 }
 
