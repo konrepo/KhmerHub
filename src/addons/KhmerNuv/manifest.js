@@ -1,13 +1,13 @@
 const EXTRA = ["search", "skip"];
 
 const sites = [
-  { id: "vip", name: "PhumiVip" },
-  { id: "sunday", name: "SundayDrama" },
-  { id: "phumi2", name: "PhumiClub" },  
-  { id: "khmerave", name: "KhmerAve" },
-  { id: "merlkon", name: "Merlkon" },
-  { id: "idrama", name: "iDramaHD" },
-  { id: "cat3movie", name: "Cat3Movie", type: "movie" }  
+  { id: "vip", name: "PhumiVip", type: "series" },
+  { id: "sunday", name: "SundayDrama", type: "series" },
+  { id: "phumi2", name: "PhumiClub", type: "series" },
+  { id: "khmerave", name: "KhmerAve", type: "series" },
+  { id: "merlkon", name: "Merlkon", type: "series" },
+  { id: "idrama", name: "iDramaHD", type: "series" },
+  { id: "cat3movie", name: "Cat3Movie", type: "movie" }
 ];
 
 module.exports = {
