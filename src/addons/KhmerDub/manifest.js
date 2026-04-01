@@ -1,4 +1,4 @@
-const TYPE = "series";
+const TYPES = ["series", "movie"];
 const EXTRA = ["search", "skip"];
 
 const sites = [
@@ -8,6 +8,8 @@ const sites = [
   { id: "khmerave", name: "KhmerAve" },
   { id: "merlkon", name: "Merlkon" },
   { id: "idrama", name: "iDramaHD" },  
+  
+  { id: "cat3movie", name: "Cat3Movie", type: "movie" }  
 ];
 
 module.exports = {
@@ -18,10 +20,10 @@ module.exports = {
   logo: "https://avatars.githubusercontent.com/u/32822347?v=4",
 
   resources: ["catalog", "meta", "stream"],
-  types: [TYPE],
+  types: TYPES,
 
   catalogs: sites.map(site => ({
-    type: TYPE,
+    type: site.type,
     id: site.id,
     name: site.name,
     extraSupported: EXTRA

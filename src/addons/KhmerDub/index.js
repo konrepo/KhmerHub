@@ -4,6 +4,7 @@ const manifest = require("./manifest");
 const engine = require("./sites/engine");
 const khmerave = require("./sites/khmerave");
 const phumi2 = require("./sites/phumi2");
+const cat3movie = require("./sites/cat3movie");
 
 const sites = require("./sites/config");
 
@@ -11,7 +12,10 @@ const axiosClient = require("./utils/fetch");
 const cheerio = require("cheerio");
 const { normalizePoster, mapMetas, uniqById } = require("./utils/helpers");
 
-const TYPE = "series";
+const SITE_TYPES = {
+  cat3movie: "movie",
+  default: "series"
+};
 
 const ENGINES = {
   vip: engine,
@@ -19,7 +23,8 @@ const ENGINES = {
   idrama: engine,
   khmerave,
   merlkon: khmerave,
-  phumi2
+  phumi2,
+  cat3movie
 };
 
 function getSiteEngine(id) {
@@ -52,7 +57,8 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 
       const items = await siteEngine.getCatalogItems(id, site, url);
 
-      return { metas: mapMetas(items, TYPE) };
+      const type = SITE_TYPES[id] || SITE_TYPES.default;
+      return { metas: mapMetas(items, type) };
     }
 
     if (id === "khmerave" || id === "merlkon") {
@@ -77,7 +83,8 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
       const allItems = results.flat();
       const uniq = uniqById(allItems);
 
-      return { metas: mapMetas(uniq, TYPE) };
+      const type = SITE_TYPES[id] || SITE_TYPES.default;
+      return { metas: mapMetas(uniq, type) };
     }
 
     if (id === "sunday") {
@@ -156,17 +163,22 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 
       const uniq = uniqById(allItems);
 
-      return { metas: mapMetas(uniq, TYPE) };
+      const type = SITE_TYPES[id] || SITE_TYPES.default;
+      return { metas: mapMetas(uniq, type) };
     }
 
-    if (id === "phumi2") {
+    if (id === "phumi2" || id === "cat3movie") {
       const base = String(site.baseUrl || "").replace(/\/$/, "");
 
       const startUrl = extra?.search
-        ? `${base}/search?q=${encodeURIComponent(extra.search)}&max-results=12`
+	  ? id === "cat3movie"
+        ? `${base}/?s=${encodeURIComponent(extra.search)}`
+        : `${base}/search?q=${encodeURIComponent(extra.search)}&max-results=12`
+	  : id === "cat3movie"
+        ? `${base}/`
         : `${base}/?max-results=12`;
 
-      const WEBSITE_PAGE_SIZE = site.pageSize || 12;
+      const WEBSITE_PAGE_SIZE = site.pageSize || (id === "cat3movie" ? 40 : 12);
       const PAGES_PER_BATCH = 3;
 
       const skip = Number(extra?.skip || 0);
@@ -197,7 +209,8 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
       }
 
       const uniq = uniqById(allItems);
-      return { metas: mapMetas(uniq, TYPE) };
+      const type = SITE_TYPES[id] || SITE_TYPES.default;
+      return { metas: mapMetas(uniq, type) };
     }
 
     const pageSize = site.pageSize || 30;
@@ -214,7 +227,8 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 
     const items = await siteEngine.getCatalogItems(id, site, url);
 
-    return { metas: mapMetas(items, TYPE) };
+    const type = SITE_TYPES[id] || SITE_TYPES.default;
+    return { metas: mapMetas(items, type) };
 
   } catch (e) {
     console.error("catalog error:", e);
@@ -227,17 +241,17 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 ========================= */
 builder.defineMetaHandler(async ({ id }) => {
   try {
-    const firstColon = id.indexOf(":");
-    if (firstColon === -1) return { meta: null };
+    const parts = id.split(":");
+    const prefix = parts[0];
+    const encodedUrl = parts.slice(1).join(":");
 
-    const prefix = id.slice(0, firstColon);
-    const encodedUrl = id.slice(firstColon + 1);
+    if (!prefix || !encodedUrl) return { meta: null };
 
     const ctx = getSiteEngine(prefix);
     if (!ctx) return { meta: null };
 
     const { engine: siteEngine } = ctx;
-
+    const siteType = SITE_TYPES[prefix] || SITE_TYPES.default;
     const seriesUrl = decodeURIComponent(encodedUrl);
 
     const episodes = await siteEngine.getEpisodes(prefix, seriesUrl);
@@ -245,10 +259,23 @@ builder.defineMetaHandler(async ({ id }) => {
 
     const first = episodes[0];
 
+    if (siteType === "movie") {
+      return {
+        meta: {
+          id,
+          type: "movie",
+          name: first.title,
+          poster: first.thumbnail,
+          background: first.thumbnail,
+          description: first.title
+        },
+      };
+    }
+
     return {
       meta: {
         id,
-        type: TYPE,
+        type: siteType,
         name: first.title,
         poster: first.thumbnail,
         background: first.thumbnail,
@@ -266,16 +293,17 @@ builder.defineMetaHandler(async ({ id }) => {
 builder.defineStreamHandler(async ({ id }) => {
   try {
     const parts = id.split(":");
+    const prefix = parts[0];
+    const encodedUrl = parts[1];
 
-    let prefix, encodedUrl, episode;
+    if (!prefix || !encodedUrl) {
+      return { streams: [] };
+    }
 
-    if (parts.length === 3) {
-      [prefix, encodedUrl, episode] = parts;
-    } else if (parts.length === 4) {
-      prefix = parts[0];
-      encodedUrl = parts[1];
-      episode = parts[3];
-    } else {
+    const isMovie = (SITE_TYPES[prefix] || SITE_TYPES.default) === "movie";
+    const epNum = isMovie ? 1 : Number(parts[parts.length - 1]);
+
+    if (!isMovie && (!Number.isInteger(epNum) || epNum <= 0)) {
       return { streams: [] };
     }
 
@@ -284,17 +312,12 @@ builder.defineStreamHandler(async ({ id }) => {
 
     const { engine: siteEngine } = ctx;
 
-    const epNum = Number(episode);
-    if (!Number.isInteger(epNum) || epNum <= 0) {
-      return { streams: [] };
-    }
-
     const seriesUrl = decodeURIComponent(encodedUrl);
 
-    const stream = await siteEngine.getStream(prefix, seriesUrl, epNum);
-    if (!stream) return { streams: [] };
+    const streams = await siteEngine.getStream(prefix, seriesUrl, epNum);
+    if (!streams) return { streams: [] };
 
-    return { streams: [stream] };
+    return { streams };
 
   } catch {
     return { streams: [] };

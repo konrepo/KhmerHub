@@ -47,6 +47,12 @@ module.exports = {
     titleSelector: "h3.entry-title a",
     posterSelector: ".archive-thumb img",
     posterAttrs: ["data-src", "src"]
-  }
+  },
+  
+  cat3movie: {
+    ...defaultSite,
+    baseUrl: "https://www.cat3movie.club/",
+    pageSize: 40,
+}  
   
 };

@@ -51,10 +51,12 @@ function extractMaxEpFromTitle(title) {
   if (!title) return null;
 
   const match =
+    title.match(/\[EP\.?\s*(\d+)\]/i) ||
     title.match(/\bEP\.?\s*(\d+)\b/i) ||
     title.match(/\bEpisode\s*(\d+)\b/i) ||
-    title.match(/\[EP\.?\s*(\d+)\]/i) ||
-    title.match(/\[(\d+)\s*(?:End|EP)\]/i);
+    title.match(/\[(\d+)\s*END\]/i) ||
+    title.match(/\[(\d+)\s*(?:End|EP)\]/i) ||
+    title.match(/episode\/(?:END\.)?(\d+)/i);
 
   return match ? parseInt(match[1], 10) : null;
 }
@@ -79,7 +81,11 @@ function mapMetas(items, type = "series") {
     type,
     name: item.name,
     poster: item.poster,
-    posterShape: "poster"
+    posterShape: "poster",
+    genres: item.genres || [],
+    description: item.genres?.length
+      ? `Category: ${item.genres.join(", ")}`
+      : ""
   }));
 }
 

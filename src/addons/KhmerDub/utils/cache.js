@@ -1,5 +1,5 @@
 const URL_TO_POSTID = new Map(); // seriesUrl -> postId
-const POST_INFO = new Map();     // postId -> { maxEp?, detail? }
+const POST_INFO = new Map();     // postId -> { maxEp?, detail?, sourceType?, pageHtml?, playerPostId?, wpPostId? }
 
 const BLOG_IDS = {
   TVSABAY: "8016412028548971199",
