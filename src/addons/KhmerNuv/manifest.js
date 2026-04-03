@@ -1,14 +1,16 @@
 const EXTRA = ["search", "skip"];
 
 const sites = [
-  { id: "vip", name: "PhumiVip", type: "series" },
-  { id: "sunday", name: "SundayDrama", type: "series" },
-  { id: "phumi2", name: "PhumiClub", type: "series" },
-  { id: "khmerave", name: "KhmerAve", type: "series" },
-  { id: "merlkon", name: "Merlkon", type: "series" },
-  { id: "idrama", name: "iDramaHD", type: "series" },
-  { id: "cat3movie", name: "Cat3Movie", type: "movie" }
+  { id: "vip", name: "PhumiVip", type: "series", enabled: true },
+  { id: "sunday", name: "SundayDrama", type: "series", enabled: true },
+  { id: "phumi2", name: "PhumiClub", type: "series", enabled: true },
+  { id: "khmerave", name: "KhmerAve", type: "series", enabled: true },
+  { id: "merlkon", name: "Merlkon", type: "series", enabled: true },
+  { id: "idrama", name: "iDramaHD", type: "series", enabled: true },
+  { id: "cat3movie", name: "Cat3Movie", type: "movie", enabled: false } // disabled
 ];
+
+const enabled = sites.filter(site => site.enabled !== false);
 
 module.exports = {
   id: "community.khmer.nuvio",
@@ -19,9 +21,10 @@ module.exports = {
 
   resources: ["catalog", "meta", "stream"],
   types: ["series", "movie"],
-  idPrefixes: sites.map((s) => s.id),
 
-  catalogs: sites.map((site) => ({
+  idPrefixes: enabled.map(s => s.id),
+
+  catalogs: enabled.map(site => ({
     type: site.type,
     id: site.id,
     name: site.name,

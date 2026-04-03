@@ -1,6 +1,10 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const manifest = require("./manifest");
 
+const enabledSites = new Set(
+  manifest.catalogs.map(c => c.id)
+);
+
 const engine = require("./sites/engine");
 const khmerave = require("./sites/khmerave");
 const phumi2 = require("./sites/phumi2");
@@ -28,6 +32,8 @@ const ENGINES = {
 };
 
 function getSiteEngine(id) {
+  if (!enabledSites.has(id)) return null;
+
   const site = sites[id];
   const engine = ENGINES[id];
 

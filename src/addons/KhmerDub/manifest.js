@@ -2,13 +2,13 @@ const TYPES = ["series", "movie"];
 const EXTRA = ["search", "skip"];
 
 const sites = [
-  { id: "vip", name: "PhumiVip", type: "series" },
-  { id: "sunday", name: "SundayDrama", type: "series" },
-  { id: "phumi2", name: "PhumiClub", type: "series" },
-  { id: "khmerave", name: "KhmerAve", type: "series" },
-  { id: "merlkon", name: "Merlkon", type: "series" },
-  { id: "idrama", name: "iDramaHD", type: "series" },
-  { id: "cat3movie", name: "Cat3Movie", type: "movie" }
+  { id: "vip", name: "PhumiVip", type: "series", enabled: true },
+  { id: "sunday", name: "SundayDrama", type: "series", enabled: true },
+  { id: "phumi2", name: "PhumiClub", type: "series", enabled: true },
+  { id: "khmerave", name: "KhmerAve", type: "series", enabled: true },
+  { id: "merlkon", name: "Merlkon", type: "series", enabled: true },
+  { id: "idrama", name: "iDramaHD", type: "series", enabled: true },
+  { id: "cat3movie", name: "Cat3Movie", type: "movie", enabled: false } // disabled
 ];
 
 module.exports = {
@@ -21,11 +21,13 @@ module.exports = {
   resources: ["catalog", "meta", "stream"],
   types: TYPES,
 
-  catalogs: sites.map(site => ({
-    type: site.type,
-    id: site.id,
-    name: site.name,
-    extraSupported: EXTRA
+  catalogs: sites
+    .filter(site => site.enabled !== false)
+    .map(site => ({
+      type: site.type,
+      id: site.id,
+      name: site.name,
+      extraSupported: EXTRA
   })),
 
   behaviorHints: {
