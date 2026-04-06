@@ -10,6 +10,7 @@ const engine = require("./sites/engine");
 const khmerave = require("./sites/khmerave");
 const phumi2 = require("./sites/phumi2");
 const cat3movie = require("./sites/cat3movie");
+const khmertv = require("./sites/khmertv");
 
 const PAGE_TRACKER = new Map();
 const PAGE_URL_CACHE = new Map();
@@ -47,7 +48,8 @@ const ENGINES = {
   khmerave,
   merlkon: khmerave,
   phumi2,
-  cat3movie
+  cat3movie,
+  khmertv
 };
 
 function getSiteEngine(id) {
@@ -83,6 +85,18 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
     if (!ctx) return { metas: [] };
 
     const { site, engine: siteEngine } = ctx;
+	
+	if (id === "khmertv") {
+      const skip = Number(extra?.skip || 0);
+      if (skip > 0) return { metas: [] };
+
+      const items = await siteEngine.getCatalogItems(id, site, "");
+      const fixed = applyMetaId(items, id);
+
+      const result = {
+        metas: mapMetas(fixed, "movie"),
+        cacheMaxAge: 3600
+	};	
 
     // KhmerAve / Merlkon: search
     if (extra?.search && (id === "khmerave" || id === "merlkon")) {
@@ -390,7 +404,7 @@ builder.defineMetaHandler(async ({ id }) => {
 
     const parts = id.split(":");
     const prefix = parts[0];
-    const metaType = prefix === "cat3movie" ? "movie" : TYPE;
+    const metaType = (prefix === "cat3movie" || prefix === "khmertv") ? "movie" : TYPE;
 
     const ctx = getSiteEngine(prefix);
     if (!ctx) return { meta: null };
@@ -556,7 +570,7 @@ builder.defineStreamHandler(async ({ id }) => {
 
     if (!stream) return { streams: [] };
 
-    return { streams: [stream] };
+    return { streams: Array.isArray(stream) ? stream : [stream] };
   } catch (err) {
     console.error("stream error:", err);
     return { streams: [] };

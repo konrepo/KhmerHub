@@ -52,5 +52,11 @@ module.exports = Object.freeze({
   cat3movie: {
     pageSize: 40,
     baseUrl: "https://www.cat3movie.club"
-  }
+  },
+  
+  khmertv: {
+	pageSize: 8,  
+    baseUrl: ""
+  },
+  
 });
