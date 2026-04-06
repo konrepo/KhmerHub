@@ -87,16 +87,20 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
     const { site, engine: siteEngine } = ctx;
 	
 	if (id === "khmertv") {
-      const skip = Number(extra?.skip || 0);
-      if (skip > 0) return { metas: [] };
+	  const khmerTvSkip = Number(extra?.skip || 0);
+	  if (khmerTvSkip > 0) return { metas: [] };
 
-      const items = await siteEngine.getCatalogItems(id, site, "");
-      const fixed = applyMetaId(items, id);
+	  const items = await siteEngine.getCatalogItems(id, site, "");
+	  const fixed = applyMetaId(items, id);
 
-      const result = {
-        metas: mapMetas(fixed, "movie"),
-        cacheMaxAge: 3600
-	};	
+	  const result = {
+	    metas: mapMetas(fixed, "movie"),
+	    cacheMaxAge: 3600
+	  };
+
+	  CATALOG_CACHE.set(cacheKey, result);
+	  return result;
+	}	
 
     // KhmerAve / Merlkon: search
     if (extra?.search && (id === "khmerave" || id === "merlkon")) {
