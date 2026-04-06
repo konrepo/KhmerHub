@@ -8,6 +8,7 @@ const sites = [
   { id: "khmerave", name: "KhmerAve", type: "series", enabled: true },
   { id: "merlkon", name: "Merlkon", type: "series", enabled: true },
   { id: "idrama", name: "iDramaHD", type: "series", enabled: true },
+  { id: "khmertv", name: "KhmerTV", type: "movie", enabled: true },  
   { id: "cat3movie", name: "Cat3Movie", type: "movie", enabled: false } // disabled
 ];
 

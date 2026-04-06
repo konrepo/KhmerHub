@@ -9,6 +9,7 @@ const engine = require("./sites/engine");
 const khmerave = require("./sites/khmerave");
 const phumi2 = require("./sites/phumi2");
 const cat3movie = require("./sites/cat3movie");
+const khmertv = require("./sites/khmertv");
 
 const sites = require("./sites/config");
 
@@ -18,6 +19,7 @@ const { normalizePoster, mapMetas, uniqById } = require("./utils/helpers");
 
 const SITE_TYPES = {
   cat3movie: "movie",
+  khmertv: "movie",
   default: "series"
 };
 
@@ -28,7 +30,8 @@ const ENGINES = {
   khmerave,
   merlkon: khmerave,
   phumi2,
-  cat3movie
+  cat3movie,
+  khmertv
 };
 
 function getSiteEngine(id) {
@@ -53,6 +56,14 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
     if (!ctx) return { metas: [] };
 
     const { site, engine: siteEngine } = ctx;
+	
+	if (id === "khmertv") {
+      const skip = Number(extra?.skip || 0);
+      if (skip > 0) return { metas: [] };
+
+      const items = await siteEngine.getCatalogItems(id, site, "");
+      return { metas: mapMetas(items, "movie") };
+	}
 
     if (extra?.search && (id === "khmerave" || id === "merlkon")) {
       const keyword = encodeURIComponent(extra.search);

@@ -53,6 +53,11 @@ module.exports = {
     ...defaultSite,
     baseUrl: "https://www.cat3movie.club/",
     pageSize: 40,
-}  
+  },
+
+  khmertv: {
+	pageSize: 8,  
+    baseUrl: ""
+  },  
   
 };
