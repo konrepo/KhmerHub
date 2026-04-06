@@ -24,14 +24,14 @@ const SITE_TYPES = {
 };
 
 const ENGINES = {
+  khmertv,	
   vip: engine,
   sunday: engine,
   idrama: engine,
   khmerave,
   merlkon: khmerave,
   phumi2,
-  cat3movie,
-  khmertv
+  cat3movie
 };
 
 function getSiteEngine(id) {
