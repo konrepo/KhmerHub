@@ -88,7 +88,9 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 	
 	if (id === "khmertv") {
 	  const khmerTvSkip = Number(extra?.skip || 0);
-	  if (khmerTvSkip > 0) return { metas: [] };
+	  if (khmerTvSkip > 0) {
+	    return { metas: [] };
+	  }
 
 	  const items = await siteEngine.getCatalogItems(id, site, "");
 	  const fixed = applyMetaId(items, id);
@@ -100,7 +102,7 @@ builder.defineCatalogHandler(async ({ id, extra }) => {
 
 	  CATALOG_CACHE.set(cacheKey, result);
 	  return result;
-	}	
+	}
 
     // KhmerAve / Merlkon: search
     if (extra?.search && (id === "khmerave" || id === "merlkon")) {
@@ -476,7 +478,7 @@ builder.defineMetaHandler(async ({ id }) => {
         description: (first.title || "KhmerDub").replace(/\[.*?\]/g, ""),
         poster: first.thumbnail,
         background: first.thumbnail,
-        videos: prefix === "cat3movie"
+        videos: (prefix === "cat3movie" || prefix === "khmertv")
           ? [{
               id: `${id}:1`,
               title: cleanName,
@@ -492,7 +494,7 @@ builder.defineMetaHandler(async ({ id }) => {
               thumbnail: ep.thumbnail
             })),
       },
-    };;
+    };
   } catch (err) {
     console.error("meta error:", err);
     return { meta: null };
