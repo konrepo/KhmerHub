@@ -2,13 +2,13 @@ const TYPES = ["series", "movie"];
 const EXTRA = ["search", "skip"];
 
 const sites = [
+  { id: "khmertv", name: "KhmerTV", type: "movie", enabled: true }, 
   { id: "vip", name: "PhumiVip", type: "series", enabled: true },
   { id: "sunday", name: "SundayDrama", type: "series", enabled: true },
   { id: "phumi2", name: "PhumiClub", type: "series", enabled: true },
   { id: "khmerave", name: "KhmerAve", type: "series", enabled: true },
   { id: "merlkon", name: "Merlkon", type: "series", enabled: true },
-  { id: "idrama", name: "iDramaHD", type: "series", enabled: true },
-  { id: "khmertv", name: "KhmerTV", type: "movie", enabled: true },  
+  { id: "idrama", name: "iDramaHD", type: "series", enabled: true }, 
   { id: "cat3movie", name: "Cat3Movie", type: "movie", enabled: false } // disabled
 ];
 
