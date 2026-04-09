@@ -12,7 +12,7 @@ const CHANNELS = [
     link: "https://live-evg17.tv360.metfone.com.kh/LiveApp/streams/eacnews.m3u8",
     thumbnail: "https://ia801501.us.archive.org/19/items/dog_gear_live_Logo/etv-channel.jpg",
     resolve: true
-  },  
+  },    
   {
     title: "KhmerTV",
     link: "https://livefta.malimarcdn.com/ftaedge00/khmertv2020.stream/chunklist.m3u8",
@@ -58,9 +58,9 @@ function findChannelByUrl(url) {
 /* =========================
    CATALOG
 ========================= */
-async function getCatalogItems() {
+async function getCatalogItems(prefix) {
   return CHANNELS.map((item) => ({
-    id: item.link,
+    id: `${prefix}:${encodeURIComponent(item.link)}`,
     name: item.title,
     poster: item.thumbnail
   }));
@@ -75,16 +75,12 @@ async function getEpisodes(prefix, seriesUrl) {
 
   return [
     {
-      id: 1,
-      url: channel.link,
+      id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:1`,
       title: channel.title,
       season: 1,
       episode: 1,
       thumbnail: channel.thumbnail,
-      released: new Date().toISOString(),
-      behaviorHints: {
-        group: `${prefix}:${encodeURIComponent(seriesUrl)}`
-      }
+      released: new Date().toISOString()
     }
   ];
 }
@@ -92,18 +88,17 @@ async function getEpisodes(prefix, seriesUrl) {
 /* =========================
    STREAM
 ========================= */
-async function getStream(prefix, episodeUrl, episode = 1) {
-  const channel = findChannelByUrl(episodeUrl);
-  const url = channel?.link || episodeUrl;
-
-  if (!url) return null;
+async function getStream(prefix, seriesUrl) {
+  const channel = findChannelByUrl(seriesUrl);
+  if (!channel || !channel.link) return null;
 
   return buildStream(
-    url,
-    episode,
-    channel?.title || "KhmerTV",
+    channel.link,
+    1,
+    channel.title,
     "KhmerTV",
-    "khmertv"
+    "khmertv",
+    null
   );
 }
 

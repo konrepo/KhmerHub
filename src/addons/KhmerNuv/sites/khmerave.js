@@ -26,6 +26,40 @@ function posterFromStyle(style) {
 }
 
 /* =========================
+   EPISODE NUMBER HELPER
+========================= */
+function extractEpisodeNumber(link, text = "") {
+  if (!link) return 1;
+
+  if (link.includes("/album/")) return 1;
+
+  const slug = link
+    .split("?")[0]
+    .replace(/\/+$/, "")
+    .split("/")
+    .pop() || "";
+
+  let m;
+
+  m = slug.match(/-(\d+)-end$/i);
+  if (m) return parseInt(m[1], 10);
+
+  m = slug.match(/-(\d+)e(?:-\d+)?$/i);
+  if (m) return parseInt(m[1], 10);
+
+  m = slug.match(/-(\d+)-\d+$/i);
+  if (m) return parseInt(m[1], 10);
+
+  m = slug.match(/-(\d+)$/i);
+  if (m) return parseInt(m[1], 10);
+
+  m = String(text).match(/Episode\s*0*(\d+)/i);
+  if (m) return parseInt(m[1], 10);
+
+  return 1;
+}
+
+/* =========================
    CATALOG
 ========================= */
 async function getCatalogItems(prefix, siteConfig, url) {
@@ -38,18 +72,20 @@ async function getCatalogItems(prefix, siteConfig, url) {
     const $ = cheerio.load(data);
     const items = [];
 
-    $(".card-content").each((_, el) => {
+    $("div.col-6.col-sm-4.thumbnail-container, div.card-content").each((_, el) => {
       const link = $(el).find("a").attr("href");
-      const title = cleanTitle($(el).find("h3").first().text());
+      const title = cleanTitle($(el).find("h3").text());
 
       const style =
-        $(el).find(".card-content-image").attr("style") || "";
+        $(el).find("div[style]").attr("style") ||
+        $(el).find(".card-content-image").attr("style") ||
+        "";
 
       const poster = posterFromStyle(style);
 
       if (link && title) {
         items.push({
-          id: link, // raw URL (hashed later in index.js)
+          id: `${prefix}:${encodeURIComponent(link)}`,
           name: title,
           poster,
         });
@@ -69,12 +105,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
 async function getEpisodes(prefix, seriesUrl) {
   try {
     const { data } = await axios.get(seriesUrl, {
-      headers: { 
-        "User-Agent": prefix === "khmerave" ? UA_WIN : UA_MOB,
-        Referer: referer(prefix),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9"
-      },
+      headers: { "User-Agent": UA_MOB, Referer: referer(prefix) },
       timeout: 15000,
     });
 
@@ -89,71 +120,32 @@ async function getEpisodes(prefix, seriesUrl) {
     }
 
     let eps = [];
+    $("table#latest-videos a[href], div.col-xs-6.col-sm-6.col-md-3 a[href]").each(
+      (_, el) => {
+        const link = $(el).attr("href");
+        if (!link) return;
+        if (link.includes("?post_type=videos")) return;
 
-    const cleanSeries = seriesUrl.replace(/\/$/, "");
-    const seriesSlug = cleanSeries.split("/").filter(Boolean).pop();
+        const text = $(el).text().trim();
+        const epNumber = extractEpisodeNumber(link, text);
 
-    function escapeRegExp(str) {
-      return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-
-    $("a[href]").each((_, el) => {
-      let link = $(el).attr("href");
-      if (!link) return;
-
-      const safeLink = link.split("#")[0].split("?")[0];
-      const cleanLink = safeLink.replace(/\/$/, "");
-
-      if (!cleanLink.includes("/videos/") && cleanLink !== cleanSeries) return;
-      if (safeLink.includes("?post_type=videos")) return;
-
-      let epNumber = null;
-
-      if (cleanLink === cleanSeries) {
-        const linkText = $(el).text().replace(/\s+/g, " ").trim();
-        const m = linkText.match(/episode\s*(\d+)/i);
-
-        if (m) {
-          epNumber = parseInt(m[1], 10);
-        } else {
-          epNumber = 1;
-        }
-      } else {
-        const slug = cleanLink.split("/").filter(Boolean).pop() || "";
-
-        let rest = slug.replace(
-          new RegExp("^" + escapeRegExp(seriesSlug) + "-?", "i"),
-          ""
-        );
-
-        let m = rest.match(/^(\d+)/);
-        if (!m) m = slug.match(/-(\d+)[^-]*$/);
-        if (m) epNumber = parseInt(m[1], 10);
+        eps.push({ link, epNumber });
       }
-
-      if (!epNumber) return;
-
-      eps.push({ link: safeLink, epNumber });
-    });
+    );
 
     if (!eps.length) return [];
 
-    eps = [...new Map(eps.map((e) => [e.epNumber, e])).values()];
+    eps = [...new Map(eps.map((e) => [e.link, e])).values()];
     eps.sort((a, b) => a.epNumber - b.epNumber);
 
     return eps.map((e) => ({
-      id: e.epNumber,
-      url: e.link,
+      id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${e.epNumber}`,
       title: pageTitle,
       season: 1,
       episode: e.epNumber,
       thumbnail: poster,
       released: new Date().toISOString(),
-      behaviorHints: {
-        group: `${prefix}:${encodeURIComponent(seriesUrl)}`,
-      },
     }));
-
   } catch (err) {
     console.error("khmerave meta error:", err.message);
     return [];
@@ -161,7 +153,7 @@ async function getEpisodes(prefix, seriesUrl) {
 }
 
 /* =========================
-   STREAM HELPERS
+   STREAM
 ========================= */
 function normalizeOkUrl(url) {
   if (!url) return url;
@@ -172,12 +164,14 @@ function normalizeOkUrl(url) {
     u = "https:" + u;
   }
 
-  return u.replace("m.ok.ru", "ok.ru");
+  // Important: convert mobile domain
+  u = u.replace("m.ok.ru", "ok.ru");
+
+  return u;
 }
 
 function tryExtractVideoCandidateFromKhmerAvenue(html) {
-  if (!html) return null;
-
+  // Base64 decode case
   const b64 = html.match(/Base64\.decode\("(.+?)"\)/i);
   if (b64?.[1]) {
     try {
@@ -187,11 +181,12 @@ function tryExtractVideoCandidateFromKhmerAvenue(html) {
     } catch {}
   }
 
+  // Standard patterns (covers options.player_list file:)
   const patterns = [
     /['"]?file['"]?\s*:\s*['"]([^'"]+)['"]/i,
     /<iframe[^>]*src=["']([^"']+)["']/i,
     /<source[^>]*src=["']([^"']+)["']/i,
-    /playlist:\s*["']([^"']+)["']/i,
+    /playlist:\s*["']([^"']+)["']/i
   ];
 
   for (const re of patterns) {
@@ -199,134 +194,143 @@ function tryExtractVideoCandidateFromKhmerAvenue(html) {
     if (m?.[1]) return m[1];
   }
 
-  const playerListMatch = html.match(/player_list\s*=\s*(\[[\s\S]*?\]);/i);
-  if (playerListMatch?.[1]) {
-    try {
-      const cleaned = playerListMatch[1].replace(/,\s*]/g, "]");
-      const list = JSON.parse(cleaned);
-      const first = Array.isArray(list) ? list[0] : null;
-      if (first?.file) return first.file;
-    } catch {}
-  }
-
-  const externalOk = html.match(/https?:\/\/m\.ok\.ru\/video\/\d+/i);
-  if (externalOk?.[0]) return externalOk[0];
-
   return null;
 }
 
 async function resolveOkRuToDirect(iframeUrl, ua) {
-  function getOkId(url) {
-    const m =
-      String(url).match(/ok\.ru\/videoembed\/(\d+)/i) ||
-      String(url).match(/ok\.ru\/video\/(\d+)/i) ||
-      String(url).match(/m\.ok\.ru\/video\/(\d+)/i);
-    return m ? m[1] : null;
-  }
+  try {
+    const okUrl = normalizeOkUrl(iframeUrl);
 
-  function extractDirect(html) {
-    let text = String(html || "");
+    const okRes = await axios.get(okUrl, {
+      headers: {
+        "User-Agent": ua,
+        "Referer": "https://ok.ru/"
+      },
+      timeout: 15000
+    });
 
-    text = text
+    let html = okRes.data;
+    if (typeof html !== "string") {
+      html = String(html);
+    }
+
+    // Decode escaped content
+    html = html
       .replace(/\\&quot;/g, '"')
       .replace(/&quot;/g, '"')
       .replace(/\\u0026/g, "&")
-      .replace(/\\u003d/g, "=")
-      .replace(/\\u002F/gi, "/")
       .replace(/\\&/g, "&")
       .replace(/\\\//g, "/");
+
+    const debugKeys = [
+      "ondemandHls",
+      "hlsMasterPlaylistUrl",
+      "hlsManifestUrl",
+      "metadataUrl",
+      "master.m3u8",
+      ".m3u8",
+      "videoSrc",
+      "flashvars",
+      "data-options",
+      "playerOptions",
+      "metadata"
+    ];
+
+    let match = null;
 
     const patterns = [
       /"ondemandHls"\s*:\s*"([^"]+)"/i,
       /"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)"/i,
       /"hlsManifestUrl"\s*:\s*"([^"]+)"/i,
-      /"master[mM]3u8Url"\s*:\s*"([^"]+)"/i,
-      /"(https:[^"]+\.m3u8[^"]*)"/i,
-      /(https:\/\/[^"'\\\s]+\.m3u8[^"'\\\s]*)/i,
+      /"metadataUrl"\s*:\s*"(https:[^"]+)"/i,
+      /"videoSrc"\s*:\s*"(https:[^"]+\.m3u8[^"]*)"/i,
+      /"(https:\/\/[^"]+master\.m3u8[^"]*)"/i,
+      /"(https:\/\/[^"]+\.m3u8[^"]*)"/i,
+      /playerOptions.*?(https:\/\/[^"' ]+\.m3u8[^"' ]*)/i,
+      /metadata.*?(https:\/\/[^"' ]+\.m3u8[^"' ]*)/i
     ];
 
     for (const re of patterns) {
-      const m = text.match(re);
-      const found = m?.[1];
-      if (found) {
-        return found
+      const m = html.match(re);
+      if (m && m[1]) {
+        match = m;
+        break;
+      }
+    }
+
+    if (!match || !match[1]) {
+      const videoUrlMatches = [
+        ...html.matchAll(/"name":"[^"]+","url":"(https:[^"]+)"/gi),
+        ...html.matchAll(/"url":"(https:[^"]+)","name":"[^"]+"/gi),
+        ...html.matchAll(/&quot;name&quot;:&quot;[^"]+&quot;,&quot;url&quot;:&quot;(https:[^"]+)&quot;/gi),
+        ...html.matchAll(/&quot;url&quot;:&quot;(https:[^"]+)&quot;,&quot;name&quot;:&quot;[^"]+&quot;/gi)
+      ];
+
+      if (videoUrlMatches.length) {
+        const directUrl = videoUrlMatches[videoUrlMatches.length - 1][1]
           .replace(/\\u0026/g, "&")
-          .replace(/\\u003d/g, "=")
-          .replace(/\\u002F/gi, "/")
           .replace(/\\&/g, "&")
           .replace(/\\\//g, "/")
           .replace(/&amp;/g, "&");
+
+        return directUrl;
       }
+
+      return null;
     }
 
-    const videoUrlMatches = [
-      ...text.matchAll(/"name":"[^"]+","url":"(https:[^"]+)"/gi),
-      ...text.matchAll(/"url":"(https:[^"]+)","name":"[^"]+"/gi),
-      ...text.matchAll(/&quot;name&quot;:&quot;[^"]+&quot;,&quot;url&quot;:&quot;(https:[^"]+)&quot;/gi),
-      ...text.matchAll(/&quot;url&quot;:&quot;(https:[^"]+)&quot;,&quot;name&quot;:&quot;[^"]+&quot;/gi)
-    ];
+    const cleanUrl = match[1]
+      .replace(/\\u0026/g, "&")
+      .replace(/\\&/g, "&");
 
-    if (videoUrlMatches.length) {
-      return videoUrlMatches[videoUrlMatches.length - 1][1]
-        .replace(/\\u0026/g, "&")
-        .replace(/\\u003d/g, "=")
-        .replace(/\\u002F/gi, "/")
-        .replace(/\\&/g, "&")
-        .replace(/\\\//g, "/")
-        .replace(/&amp;/g, "&");
-    }
-
-    return null;
-  }
-
-  try {
-    const original = String(iframeUrl || "").trim();
-    const normalized = normalizeOkUrl(original);
-    const id = getOkId(original);
-
-    const urlsToTry = [];
-
-    if (original) urlsToTry.push(original);
-    if (normalized && normalized !== original) urlsToTry.push(normalized);
-
-    if (id) {
-      urlsToTry.push(`https://ok.ru/videoembed/${id}`);
-      urlsToTry.push(`https://ok.ru/video/${id}`);
-      urlsToTry.push(`https://m.ok.ru/video/${id}`);
-    }
-
-    const uniqueUrls = [...new Set(urlsToTry)];
-
-    for (const okUrl of uniqueUrls) {
+    // If this is a metadata URL, fetch real m3u8
+    if (/metadata/i.test(cleanUrl) && /^https?:\/\//i.test(cleanUrl)) {
       try {
-        const okRes = await axios.get(okUrl, {
+        const metaRes = await axios.get(cleanUrl, {
           headers: {
             "User-Agent": ua,
-            Referer: "https://ok.ru/",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://ok.ru/"
           },
-          timeout: 15000,
+          timeout: 15000
         });
 
-        const direct = extractDirect(okRes.data);
-        if (direct) return direct;
-      } catch (err) {
-        console.error("OK resolver try failed:", okUrl, err.message);
+        let metaText = metaRes.data;
+        if (typeof metaText !== "string") {
+          metaText = JSON.stringify(metaText);
+        }
+
+        metaText = metaText
+          .replace(/\\u0026/g, "&")
+          .replace(/\\&/g, "&")
+          .replace(/\\\//g, "/");
+
+        const metaMatch =
+          metaText.match(/"ondemandHls"\s*:\s*"([^"]+)"/i) ||
+          metaText.match(/"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)"/i) ||
+          metaText.match(/"(https:\/\/[^"]+\.m3u8[^"]*)"/i);
+
+        if (metaMatch?.[1]) {
+          const finalUrl = metaMatch[1]
+            .replace(/\\u0026/g, "&")
+            .replace(/\\&/g, "&")
+            .replace(/\\\//g, "/");
+
+          return finalUrl;
+        }
+      } catch (e) {
+        console.error("OK metadata resolver error:", e.response?.status || e.message);
       }
     }
 
-    return null;
+    return cleanUrl;
+
   } catch (err) {
-    console.error("OK resolver error:", err.message);
+    console.error("OK resolver error:", err.response?.status || err.message);
     return null;
   }
 }
 
-/* =========================
-   STREAM
-========================= */
-async function getStream(prefix, episodeUrl, episode) {
+async function getStream(prefix, seriesUrl, episode) {
   try {
     const providerNames = {
       khmerave: "KhmerAve",
@@ -334,25 +338,52 @@ async function getStream(prefix, episodeUrl, episode) {
     };
 
     const providerName = providerNames[prefix] || "KhmerDub";
-    const groupName = `${prefix}:${encodeURIComponent(episodeUrl)}`;
+    const groupName = prefix || "khmerdub";
 
-    const epRes = await axios.get(episodeUrl, {
-      headers: { 
-        "User-Agent": prefix === "khmerave" ? UA_WIN : UA_MOB,
-        Referer: referer(prefix),
-      },
+    // Re-scrape series page to find episode link
+    const { data } = await axios.get(seriesUrl, {
+      headers: { "User-Agent": UA_MOB, Referer: referer(prefix) },
       timeout: 15000,
     });
 
-    const html = String(epRes.data || "");
+    const $ = cheerio.load(data);
 
-    const candidate = tryExtractVideoCandidateFromKhmerAvenue(html);
+    let eps = [];
+    $("table#latest-videos a[href], div.col-xs-6.col-sm-6.col-md-3 a[href]").each(
+      (_, el) => {
+        const link = $(el).attr("href");
+        if (!link) return;
+        if (link.includes("?post_type=videos")) return;
+
+        const text = $(el).text().trim();
+        const epNumber = extractEpisodeNumber(link, text);
+
+        eps.push({ link, epNumber });
+      }
+    );
+
+    eps = [...new Map(eps.map((e) => [e.link, e])).values()];
+    eps.sort((a, b) => a.epNumber - b.epNumber);
+
+    const target = eps.find((e) => e.epNumber === episode);
+    if (!target) return null;
+
+    const epUrl = target.link;
+
+    const epRes = await axios.get(epUrl, {
+      headers: { "User-Agent": UA_MOB, Referer: referer(prefix) },
+      timeout: 15000,
+    });
+
+    const candidate = tryExtractVideoCandidateFromKhmerAvenue(String(epRes.data || ""));
     if (!candidate) return null;
 
     const cand = normalizeOkUrl(candidate);
 
-    if (/ok\.ru/.test(cand)) {
+    if (cand.includes("ok.ru")) {
+	  
       const direct = await resolveOkRuToDirect(cand, UA_MOB);
+	  
       if (!direct) return null;
 
       return {
@@ -365,7 +396,7 @@ async function getStream(prefix, episodeUrl, episode) {
           proxyHeaders: {
             request: {
               Referer: "https://ok.ru/",
-              "User-Agent": UA_MOB,
+              "User-Agent": UA_MOB
             },
           },
         },
@@ -395,3 +426,4 @@ module.exports = {
   getEpisodes,
   getStream,
 };
+

@@ -1,112 +1,22 @@
 const axiosClient = require("./fetch");
 
 /* =========================
-   HELPERS
-========================= */
-function cleanUrl(url = "") {
-  return String(url)
-    .replace(/\\u0026/g, "&")
-    .replace(/\\\//g, "/")
-    .replace(/&amp;/g, "&")
-    .replace(/\\&quot;/g, "")
-    .replace(/&quot;/g, "")
-    .trim();
-}
-
-function decodeBase64Url(value = "") {
-  try {
-    return Buffer.from(value, "base64").toString("utf8");
-  } catch {
-    return "";
-  }
-}
-
-function extractPlayableUrl(html = "") {
-  const text = cleanUrl(html);
-
-  const patterns = [
-    /https?:\/\/[^\s"'<>]+\.m3u8(?:\?[^\s"'<>]+)?/i,
-    /https?:\/\/[^\s"'<>]+\.mp4(?:\?[^\s"'<>]+)?/i,
-    /https?:\/\/ok\.ru\/videoembed\/\d+/i,
-    /https?:\/\/www\.dailymotion\.com\/embed\/video\/[a-zA-Z0-9]+/i,
-    /https?:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/preview/i,
-    /https?:\/\/phumikhmer\.vip\/player\.php\?(?:id|stream)=[^"'<> ]+/i
-  ];
-
-  for (const re of patterns) {
-    const match = text.match(re);
-    if (match) return cleanUrl(match[0]);
-  }
-
-  return null;
-}
-
-/* =========================
    PLAYER RESOLVE
 ========================= */
-async function resolvePlayerUrl(playerUrl, depth = 0) {
+async function resolvePlayerUrl(playerUrl) {
   try {
-    console.log("[resolvePlayerUrl] start:", { playerUrl, depth });
+    const { data } = await axiosClient.get(playerUrl);
 
-    if (!playerUrl || depth > 3) {
-      console.log("[resolvePlayerUrl] stop: invalid url or max depth");
-      return null;
-    }
+    const html = data
+      .replace(/\\\//g, "/")
+      .replace(/&amp;/g, "&");
 
-    playerUrl = String(playerUrl)
-      .trim()
-      .replace(/;+$/, "");
-
-    console.log("[resolvePlayerUrl] cleaned playerUrl:", playerUrl);
-
-    // DIRECT HANDLE: player.php?stream=<base64>&ext=.mp4
-    const streamMatch = playerUrl.match(
-      /[?&]stream=([^&]+)(?:&ext=(\.\w+))?/i
+    const match = html.match(
+      /https?:\/\/phumikhmer\.vip\/player\.php\?stream=[^"'<> ]+/i
     );
 
-    if (streamMatch) {
-      const encoded = decodeURIComponent(streamMatch[1]);
-      const decoded = cleanUrl(decodeBase64Url(encoded));
-      const ext = streamMatch[2] || "";
-
-      console.log("[resolvePlayerUrl] stream param found");
-      console.log("[resolvePlayerUrl] decoded stream:", decoded);
-      console.log("[resolvePlayerUrl] ext:", ext);
-
-      if (decoded && /^https?:\/\//i.test(decoded)) {
-        // DO NOT append ext for signed stream URLs
-        console.log("[resolvePlayerUrl] final decoded:", decoded);
-        return decoded;
-      }
-    }
-
-    const { data } = await axiosClient.get(playerUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        Referer: "https://phumikhmer.vip/"
-      }
-    });
-
-    const html = typeof data === "string" ? data : JSON.stringify(data);
-    console.log("[resolvePlayerUrl] html length:", html.length);
-    console.log("[resolvePlayerUrl] html preview:", html.slice(0, 1200));
-
-    const found = extractPlayableUrl(html);
-    console.log("[resolvePlayerUrl] found:", found);
-
-    if (!found) return null;
-
-    if (
-      /phumikhmer\.vip\/player\.php\?(?:id|stream)=/i.test(found) &&
-      found !== playerUrl
-    ) {
-      console.log("[resolvePlayerUrl] recursive resolve:", found);
-      return resolvePlayerUrl(found, depth + 1);
-    }
-
-    return found;
-  } catch (err) {
-    console.log("[resolvePlayerUrl] error:", err.message);
+    return match ? match[0] : null;
+  } catch {
     return null;
   }
 }
@@ -116,40 +26,114 @@ async function resolvePlayerUrl(playerUrl, depth = 0) {
 ========================= */
 async function resolveOkEmbed(embedUrl) {
   try {
-    console.log("[resolveOkEmbed] start:", embedUrl);
-
     const { data } = await axiosClient.get(embedUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0",
-        Referer: "https://ok.ru/",
-        Origin: "https://ok.ru"
+        Referer: "https://ok.ru/"
       }
     });
 
-    const html = typeof data === "string" ? data : JSON.stringify(data);
-    console.log("[resolveOkEmbed] html length:", html.length);
+    let html = typeof data === "string" ? data : JSON.stringify(data);
+
+    html = html
+      .replace(/\\u0026/g, "&")
+      .replace(/\\&/g, "&")
+      .replace(/\\\//g, "/")
+      .replace(/\\&quot;/g, '"')
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, "&");
 
     const patterns = [
-      /\\&quot;ondemandHls\\&quot;:\\&quot;(https:\/\/[^"]+?\.m3u8[^"]*)/i,
-      /&quot;ondemandHls&quot;:&quot;(https:\/\/[^"]+?\.m3u8[^"]*)/i,
-      /"ondemandHls":"(https:\/\/[^"]+?\.m3u8[^"]*)/i,
-      /"hlsMasterPlaylistUrl":"(https:\/\/[^"]+?\.m3u8[^"]*)/i,
-      /"hlsManifestUrl":"(https:\/\/[^"]+?\.m3u8[^"]*)/i
+      /"hlsMasterPlaylistUrl":"(https:[^"]+?\.m3u8[^"]*)"/i,
+      /"ondemandHls":"(https:[^"]+?\.m3u8[^"]*)"/i,
+      /"hlsManifestUrl":"(https:[^"]+?\.m3u8[^"]*)"/i,
+      /"metadataUrl":"(https:[^"]+)"/i,
+      /"videoSrc":"(https:[^"]+?\.m3u8[^"]*)"/i,
+      /"(https:\/\/[^"]+master\.m3u8[^"]*)"/i,
+      /"(https:\/\/[^"]+\.m3u8[^"]*)"/i
     ];
 
+    let match = null;
+
     for (const re of patterns) {
-      const match = html.match(re);
-      if (match) {
-        const finalUrl = cleanUrl(match[1]).replace(/\\&quot;.*/g, "");
-        console.log("[resolveOkEmbed] found:", finalUrl);
-        return finalUrl;
+      const m = html.match(re);
+      if (m?.[1]) {
+        match = m;
+        break;
       }
     }
 
-    console.log("[resolveOkEmbed] no hls found");
-    return null;
-  } catch (err) {
-    console.log("[resolveOkEmbed] error:", err.message);
+    if (!match?.[1]) {
+      const altMatches = [
+        ...html.matchAll(/"name":"[^"]+","url":"(https:[^"]+)"/gi),
+        ...html.matchAll(/"url":"(https:[^"]+)","name":"[^"]+"/gi)
+      ];
+
+      if (altMatches.length) {
+        return altMatches[altMatches.length - 1][1]
+          .replace(/\\u0026/g, "&")
+          .replace(/\\&/g, "&")
+          .replace(/\\\//g, "/")
+          .replace(/&amp;/g, "&");
+      }
+
+      return null;
+    }
+
+    let cleanUrl = match[1]
+      .replace(/\\u0026/g, "&")
+      .replace(/\\&/g, "&")
+      .replace(/\\\//g, "/")
+      .replace(/&amp;/g, "&");
+
+    if (/metadata/i.test(cleanUrl) && /^https?:\/\//i.test(cleanUrl)) {
+      try {
+        const { data: metaData } = await axiosClient.get(cleanUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0",
+            Referer: "https://ok.ru/"
+          }
+        });
+
+        let metaText = typeof metaData === "string"
+          ? metaData
+          : JSON.stringify(metaData);
+
+        metaText = metaText
+          .replace(/\\u0026/g, "&")
+          .replace(/\\&/g, "&")
+          .replace(/\\\//g, "/")
+          .replace(/&amp;/g, "&");
+
+        const metaMatch =
+          metaText.match(/"ondemandHls"\s*:\s*"([^"]+)"/i) ||
+          metaText.match(/"hlsMasterPlaylistUrl"\s*:\s*"([^"]+)"/i) ||
+          metaText.match(/"hlsManifestUrl"\s*:\s*"([^"]+)"/i) ||
+          metaText.match(/"videoSrc"\s*:\s*"([^"]+\.m3u8[^"]*)"/i) ||
+          metaText.match(/"(https:\/\/[^"]+\.m3u8[^"]*)"/i);
+
+        if (metaMatch?.[1]) {
+          cleanUrl = metaMatch[1]
+            .replace(/\\u0026/g, "&")
+            .replace(/\\&/g, "&")
+            .replace(/\\\//g, "/")
+            .replace(/&amp;/g, "&");
+
+          console.log("[resolveOkEmbed] metadata final", cleanUrl);
+        }
+      } catch {}
+    }
+
+    cleanUrl = cleanUrl
+      .replace(/\\u0026/g, "&")
+      .replace(/\\&/g, "&")
+      .replace(/\\\//g, "/")
+      .replace(/&amp;/g, "&");
+
+    console.log("[resolveOkEmbed] final", cleanUrl);
+
+    return cleanUrl;
+  } catch {
     return null;
   }
 }
@@ -163,35 +147,38 @@ function buildStream(
   title,
   name = "KhmerDub",
   group = "khmerdub",
-  options = {}
+  referer = null
 ) {
-  const { forceProxyHeaders = false } = options;
-
-  const needsOkHeaders =
-    forceProxyHeaders || /ok\.ru|okcdn\.ru|vkuser\.net/i.test(url);
-
-  console.log("[buildStream]", {
-    url,
-    needsOkHeaders,
-    type: /\.m3u8(\?|$)/i.test(url) ? "hls" : "mp4/other"
-  });
+  const isOk = /ok\.ru|okcdn\.ru/i.test(url);
 
   return {
     url,
     name,
     title: title || `Episode ${episode}`,
-    type: /\.m3u8(\?|$)/i.test(url) ? "hls" : undefined,
-    behaviorHints: needsOkHeaders
+    type: url.includes(".m3u8") ? "hls" : undefined,
+    behaviorHints: isOk
       ? {
           group,
+          notWebReady: true,
           proxyHeaders: {
             request: {
               Referer: "https://ok.ru/",
-              Origin: "https://ok.ru"
+              Origin: "https://ok.ru",
+              "User-Agent": "Mozilla/5.0"
             }
           }
         }
-      : { group }
+      : referer
+        ? {
+            group,
+            proxyHeaders: {
+              request: {
+                Referer: referer,
+                "User-Agent": "Mozilla/5.0"
+              }
+            }
+          }
+        : { group }
   };
 }
 
@@ -199,4 +186,5 @@ module.exports = {
   resolvePlayerUrl,
   resolveOkEmbed,
   buildStream
+
 };

@@ -1,5 +1,3 @@
-// phumi2.js
-
 const cheerio = require("cheerio");
 const axiosClient = require("../utils/fetch");
 const {
@@ -13,21 +11,13 @@ const {
   buildStream
 } = require("../utils/streamResolvers");
 
-const DEBUG = false;
-
 /* =========================
    CONFIG
 ========================= */
 const PAGE_HEADERS = {
   "User-Agent":
-    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36",
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9"
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
 };
-
-const DETAIL_CACHE = new Map();
-const DETAIL_TTL = 5 * 60 * 1000;
-const DETAIL_PENDING = new Map();
 
 /* =========================
    HELPERS
@@ -59,25 +49,32 @@ function normalizePhumiPoster(url) {
 function normalizeEpisodeTitle(title, index) {
   if (!title) return `Episode ${index + 1}`;
 
-  let t = String(title).trim();
+  let t = title.trim();
 
+  // EP 1 → Episode 1
   t = t.replace(/^EP\s*/i, "Episode ");
+
+  // EP30 → Episode 30
   t = t.replace(/^Episode\s*(\d+)E$/i, "Episode $1 End");
+
+  // EP 30E → Episode 30 End
   t = t.replace(/^Episode\s*(\d+)\s*E$/i, "Episode $1 End");
 
   return t;
 }
 
-function getCachedDetail(url) {
-  const cached = DETAIL_CACHE.get(url);
-  if (!cached) return null;
+function normalizeVideoUrl(url, baseUrl = "") {
+  if (!url) return "";
 
-  if (Date.now() - cached.time > DETAIL_TTL) {
-    DETAIL_CACHE.delete(url);
-    return null;
+  let u = String(url).trim();
+
+  if (u.startsWith("//")) {
+    u = "https:" + u;
+  } else if (u.startsWith("/")) {
+    u = absolutizeUrl(u, baseUrl || "https://www.phumikhmer1.club");
   }
 
-  return cached.data;
+  return u;
 }
 
 function getNextPageUrl(base, html) {
@@ -112,19 +109,14 @@ function getNextPageUrl(base, html) {
 
 function parseVideosArray(html) {
   try {
-    const match =
+    let match =
+      html.match(/options\.player_list\s*=\s*(\[[\s\S]*?\])\s*;/i) ||
       html.match(/const\s+videos\s*=\s*(\[[\s\S]*?\]);\s*<\/script>/i) ||
-      html.match(/const\s+videos\s*=\s*(\[[\s\S]*?\]);/i) ||
-      html.match(/let\s+videos\s*=\s*(\[[\s\S]*?\]);/i) ||
-      html.match(/var\s+videos\s*=\s*(\[[\s\S]*?\]);/i);
-
-    if (DEBUG) console.log("PHUMI2 parseVideosArray MATCH FOUND:", !!match);
+      html.match(/const\s+videos\s*=\s*(\[[\s\S]*?\]);/i);
 
     if (!match || !match[1]) return [];
 
     let raw = match[1].trim();
-
-    if (DEBUG) console.log("PHUMI2 RAW:", raw.slice(0, 200));
 
     raw = raw
       .replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":')
@@ -133,131 +125,54 @@ function parseVideosArray(html) {
       .replace(/,\s*}/g, "}");
 
     const parsed = JSON.parse(raw);
-
-    if (DEBUG) console.log("PHUMI2 PARSED LENGTH:", parsed.length);
+    if (!Array.isArray(parsed)) return [];
 
     return parsed
       .map((item, index) => ({
-        title: normalizeEpisodeTitle(item?.title, index),
-        file: String(item?.file || "").trim()
+        title: normalizeEpisodeTitle(item.title, index),
+        file: normalizeVideoUrl(item.file)
       }))
       .filter((item) => item.file);
-
   } catch (err) {
-    console.error("PHUMI2 parseVideosArray ERROR:", err.message);
+    console.log("[phumi2] parseVideosArray failed:", err.message);
     return [];
   }
 }
 
-async function fetchWithRetry(url, headers, retries = 3) {
-  let lastErr;
-
-  for (let i = 0; i < retries; i++) {
-    try {
-      const retryHeaders = {
-        ...headers,
-        Referer: i === 0
-          ? "https://www.phumikhmer1.club/"
-          : url
-      };
-
-      const res = await axiosClient.get(url, { headers: retryHeaders });
-      return res.data;
-    } catch (err) {
-      lastErr = err;
-
-      const status = err.response?.status || 0;
-      if (DEBUG) console.log("PHUMI2 FETCH RETRY:", {
-        attempt: i + 1,
-        status,
-        url
-      });
-
-      if (status !== 429 && status !== 403 && status !== 503) {
-        throw err;
-      }
-
-      const waitMs = 1500 * (i + 1);
-      await new Promise(resolve => setTimeout(resolve, waitMs));
-    }
-  }
-
-  throw lastErr;
-}
-
 async function getPageDetail(url) {
   try {
-    const cached = getCachedDetail(url);
-    if (cached) {
-      if (DEBUG) console.log("PHUMI2 getPageDetail CACHE HIT:", url);
-      return cached;
-    }
-
-    const pending = DETAIL_PENDING.get(url);
-    if (pending) {
-      if (DEBUG) console.log("PHUMI2 getPageDetail PENDING HIT:", url);
-      return await pending;
-    }
-
-    const requestPromise = (async () => {
-      if (DEBUG) console.log("PHUMI2 getPageDetail URL:", url);
-
-      const data = await fetchWithRetry(url, {
+    const { data } = await axiosClient.get(url, {
+      headers: {
         ...PAGE_HEADERS,
-        Referer: "https://www.phumikhmer1.club/"
-      });
-
-      if (DEBUG) console.log("PHUMI2 HTML LENGTH:", data?.length || 0);
-
-      const html = String(data || "");
-      const videos = parseVideosArray(html);
-
-      if (DEBUG) console.log("PHUMI2 VIDEOS PARSED:", videos.length);
-
-      if (!videos.length) {
-        if (DEBUG) console.log("PHUMI2: FAILED TO PARSE VIDEOS");
-        return null;
+        Referer: url
       }
+    });
 
-      const $ = cheerio.load(html);
+    const $ = cheerio.load(data);
 
-      const title =
-        cleanTitle($("h1.entry-title").first().text()) ||
-        cleanTitle($('meta[property="og:title"]').attr("content")) ||
-        cleanTitle($("title").text());
+    const title =
+      cleanTitle($("h1.entry-title").first().text()) ||
+      cleanTitle($('meta[property="og:title"]').attr("content")) ||
+      cleanTitle($("title").text());
 
-      let thumbnail =
-        $('meta[property="og:image"]').attr("content") ||
-        $('meta[name="twitter:image"]').attr("content") ||
-        $("#postimg img").first().attr("src") ||
-        $("meta[itemprop='image']").attr("content") ||
-        "";
+    let thumbnail =
+      $('meta[property="og:image"]').attr("content") ||
+      $('meta[name="twitter:image"]').attr("content") ||
+      $("#postimg img").first().attr("src") ||
+      $("meta[itemprop='image']").attr("content") ||
+      "";
 
-      thumbnail = normalizePhumiPoster(thumbnail);
+    thumbnail = normalizePhumiPoster(thumbnail);
 
-      const detail = {
-        title,
-        thumbnail,
-        videos
-      };
+    const videos = parseVideosArray(data);
+    if (!videos.length) return null;
 
-      DETAIL_CACHE.set(url, {
-        time: Date.now(),
-        data: detail
-      });
-
-      return detail;
-    })();
-
-    DETAIL_PENDING.set(url, requestPromise);
-
-    const result = await requestPromise;
-    DETAIL_PENDING.delete(url);
-    return result;
-
-  } catch (err) {
-    DETAIL_PENDING.delete(url);
-    console.error("PHUMI2 getPageDetail ERROR:", err.message);
+    return {
+      title,
+      thumbnail,
+      videos
+    };
+  } catch {
     return null;
   }
 }
@@ -306,15 +221,14 @@ async function getCatalogItems(prefix, siteConfig, url) {
       poster = normalizePhumiPoster(poster);
 
       return {
-        id: link,
+        id: `${prefix}:${encodeURIComponent(link)}`,
         name: title,
         poster
       };
     });
 
     return uniqById(results.filter(Boolean));
-  } catch (err) {
-    console.error("phumi2 catalog error:", err.message);
+  } catch {
     return [];
   }
 }
@@ -324,42 +238,18 @@ async function getCatalogItems(prefix, siteConfig, url) {
 ========================= */
 async function getEpisodes(prefix, seriesUrl) {
   try {
-    if (DEBUG) console.log("PHUMI2 getEpisodes START:", {
-      prefix,
-      seriesUrl
-    });
-
     const detail = await getPageDetail(seriesUrl);
+    if (!detail?.videos?.length) return [];
 
-    if (DEBUG) console.log("PHUMI2 getEpisodes DETAIL:", {
-      hasDetail: !!detail,
-      videoCount: detail?.videos?.length || 0
-    });
-
-    if (!detail?.videos?.length) {
-      if (DEBUG) console.log("PHUMI2 getEpisodes: NO VIDEOS FOUND");
-      return [];
-    }
-
-    const episodes = detail.videos.map((v, index) => ({
-      id: index + 1,
-      url: seriesUrl,
-      title: detail.title || `Episode ${index + 1}`,
+    return detail.videos.map((v, index) => ({
+      id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${index + 1}`,
+      title: detail.title || v.title || `Episode ${index + 1}`,
       season: 1,
       episode: index + 1,
       thumbnail: detail.thumbnail || "",
-      released: new Date().toISOString(),
-      behaviorHints: {
-        group: `${prefix}:${encodeURIComponent(seriesUrl)}`
-      }
+      released: new Date().toISOString()
     }));
-
-    if (DEBUG) console.log("PHUMI2 getEpisodes SUCCESS:", episodes.length);
-
-    return episodes;
-
-  } catch (err) {
-    console.error("PHUMI2 getEpisodes ERROR:", err.message);
+  } catch {
     return [];
   }
 }
@@ -369,21 +259,13 @@ async function getEpisodes(prefix, seriesUrl) {
 ========================= */
 async function getStream(prefix, seriesUrl, episode) {
   try {
-    if (!seriesUrl) return null;
-
     const detail = await getPageDetail(seriesUrl);
     if (!detail?.videos?.length) return null;
 
     const v = detail.videos[episode - 1];
     if (!v?.file) return null;
 
-    let url = String(v.file).trim();
-
-    if (url.startsWith("//")) {
-      url = "https:" + url;
-    }
-
-    url = url.replace(/^http:/i, "https:");
+    let url = normalizeVideoUrl(v.file, seriesUrl);
 
     if (url.includes("player.php")) {
       const resolved = await resolvePlayerUrl(url);
@@ -391,15 +273,15 @@ async function getStream(prefix, seriesUrl, episode) {
       url = resolved;
     }
 
-    if (/ok\.ru\/(?:videoembed|video)\//i.test(url)) {
-      const resolved = await resolveOkEmbed(url);
-      if (!resolved) return null;
-      url = resolved;
+    if (url.includes("ok.ru/videoembed/")) {
+      const cleaned = url.replace(/[?&]autoplay=1\b/g, "").replace(/\?$/, "");
+      const resolved = await resolveOkEmbed(cleaned);
+      url = resolved || cleaned;
     }
 
     return buildStream(url, episode, v.title, "PhumiClub", "phumi2");
   } catch (err) {
-    console.error("phumi2 getStream error:", err.message);
+    console.log("[phumi2] getStream failed:", err.message);
     return null;
   }
 }
@@ -410,3 +292,4 @@ module.exports = {
   getStream,
   getNextPageUrl
 };
+
