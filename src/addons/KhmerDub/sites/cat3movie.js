@@ -304,7 +304,7 @@ async function getStream(prefix, url, epNum = 1) {
         src,
         epNum,
         detail?.title || "Cat3Movie",
-        `Cat3Movie ${index + 1}`,
+        uniqueSources.length > 1 ? `Server ${index + 1}` : "Cat3Movie",
         "cat3"
       )
     );
@@ -318,4 +318,5 @@ module.exports = {
   getEpisodes,
   getStream,
   getNextPageUrl
+
 };

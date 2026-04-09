@@ -63,6 +63,20 @@ function normalizeEpisodeTitle(title, index) {
   return t;
 }
 
+function normalizeVideoUrl(url, baseUrl = "") {
+  if (!url) return "";
+
+  let u = String(url).trim();
+
+  if (u.startsWith("//")) {
+    u = "https:" + u;
+  } else if (u.startsWith("/")) {
+    u = absolutizeUrl(u, baseUrl || "https://www.phumikhmer1.club");
+  }
+
+  return u;
+}
+
 function getNextPageUrl(base, html) {
   const $ = cheerio.load(html);
 
@@ -95,7 +109,8 @@ function getNextPageUrl(base, html) {
 
 function parseVideosArray(html) {
   try {
-    const match =
+    let match =
+      html.match(/options\.player_list\s*=\s*(\[[\s\S]*?\])\s*;/i) ||
       html.match(/const\s+videos\s*=\s*(\[[\s\S]*?\]);\s*<\/script>/i) ||
       html.match(/const\s+videos\s*=\s*(\[[\s\S]*?\]);/i);
 
@@ -115,10 +130,11 @@ function parseVideosArray(html) {
     return parsed
       .map((item, index) => ({
         title: normalizeEpisodeTitle(item.title, index),
-        file: String(item.file || "").trim()
+        file: normalizeVideoUrl(item.file)
       }))
       .filter((item) => item.file);
-  } catch {
+  } catch (err) {
+    console.log("[phumi2] parseVideosArray failed:", err.message);
     return [];
   }
 }
@@ -249,7 +265,7 @@ async function getStream(prefix, seriesUrl, episode) {
     const v = detail.videos[episode - 1];
     if (!v?.file) return null;
 
-    let url = v.file;
+    let url = normalizeVideoUrl(v.file, seriesUrl);
 
     if (url.includes("player.php")) {
       const resolved = await resolvePlayerUrl(url);
@@ -258,13 +274,14 @@ async function getStream(prefix, seriesUrl, episode) {
     }
 
     if (url.includes("ok.ru/videoembed/")) {
-      const resolved = await resolveOkEmbed(url);
-      if (!resolved) return null;
-      url = resolved;
+      const cleaned = url.replace(/[?&]autoplay=1\b/g, "").replace(/\?$/, "");
+      const resolved = await resolveOkEmbed(cleaned);
+      url = resolved || cleaned;
     }
 
     return buildStream(url, episode, v.title, "PhumiClub", "phumi2");
-  } catch {
+  } catch (err) {
+    console.log("[phumi2] getStream failed:", err.message);
     return null;
   }
 }
@@ -275,3 +292,4 @@ module.exports = {
   getStream,
   getNextPageUrl
 };
+
