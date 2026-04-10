@@ -42,6 +42,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
             id: `${prefix}:${encodeURIComponent(link)}`,
             name: title,
             poster: normalizedPoster,
+			background: normalizedPoster,
           });
         }
 
@@ -78,6 +79,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
         id: `${prefix}:${encodeURIComponent(link)}`,
         name: title,
         poster: normalizedPoster,
+		background: normalizedPoster,
       };
     });
 
