@@ -78,6 +78,19 @@ module.exports = {
         };
       }
 
+      if (site.id === "xvideos") {
+        return {
+          type: site.type,
+          id: site.id,
+          name: site.name,
+          extra: [
+            { name: "search", isRequired: false },
+            { name: "skip", isRequired: false },
+            { name: "genre", isRequired: false, options: Object.keys(config.xvideos.categoryMap || {}) }
+          ]
+        };
+      }
+
       return {
         type: site.type,
         id: site.id,

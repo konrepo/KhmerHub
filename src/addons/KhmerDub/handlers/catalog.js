@@ -276,6 +276,31 @@ module.exports = (builder, deps) => {
         return { metas: mapMetas(uniq, type) };
       }
 
+      // xVideos genre
+      if (id === "xvideos" && extra?.genre) {
+        const base = String(site.baseUrl || "").replace(/\/$/, "");
+        const pageSize = site.pageSize || 27;
+        const skip = Number(extra?.skip || 0);
+        const page = Math.floor(skip / pageSize) + 1;
+
+        const categoryPath = site.categoryMap?.[extra.genre];
+        if (!categoryPath) return { metas: [] };
+
+        const normalizedPath = String(categoryPath).startsWith("http")
+          ? String(categoryPath).replace(/\/$/, "")
+          : `${base}${String(categoryPath)}`.replace(/\/$/, "");
+
+        const url = page === 1
+          ? normalizedPath
+          : normalizedPath.includes("?")
+            ? `${normalizedPath}&p=${page}`
+            : `${normalizedPath}/${page - 1}`;
+
+        const items = await siteEngine.getCatalogItems(id, site, url);
+
+        const type = SITE_TYPES[id] || SITE_TYPES.default;
+        return { metas: mapMetas(items, type) };
+      }
 
       // Phumi2
       if (id === "phumi2" && extra?.genre) {
