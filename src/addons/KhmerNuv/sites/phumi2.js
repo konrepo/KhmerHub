@@ -8,7 +8,8 @@ const {
 const {
   resolvePlayerUrl,
   resolveOkEmbed,
-  buildStream
+  buildStream,
+  buildYouTubeStreams
 } = require("../utils/streamResolvers");
 
 /* =========================
@@ -267,6 +268,23 @@ async function getStream(prefix, seriesUrl, episode) {
 
     let url = normalizeVideoUrl(v.file, seriesUrl);
 
+    if (/youtu\.be|youtube\.com/i.test(url)) {
+      const ytId =
+        url.match(/youtu\.be\/([^?&/]+)/)?.[1] ||
+        url.match(/[?&]v=([^&]+)/)?.[1] ||
+        url.match(/\/embed\/([^?&/]+)/)?.[1] ||
+        url.match(/\/shorts\/([^?&/]+)/)?.[1];
+
+      if (!ytId) return null;
+
+      return {
+        ytId,
+        name: "PhumiClub",
+        title: `Episode ${episode} (YouTube)`,
+        behaviorHints: { group: "phumi2" }
+      };
+    }
+
     if (url.includes("player.php")) {
       const resolved = await resolvePlayerUrl(url);
       if (!resolved) return null;
@@ -279,7 +297,7 @@ async function getStream(prefix, seriesUrl, episode) {
       url = resolved || cleaned;
     }
 
-    return buildStream(url, episode, v.title, "PhumiClub", "phumi2");
+    return buildStream(url, episode, `Episode ${episode}`, "PhumiClub", "phumi2");
   } catch (err) {
     console.log("[phumi2] getStream failed:", err.message);
     return null;

@@ -1,6 +1,58 @@
 const axiosClient = require("./fetch");
 
 /* =========================
+   YOUTUBE HELPERS
+========================= */
+function extractYouTubeId(url = "") {
+  const u = String(url).trim();
+
+  const patterns = [
+    /youtu\.be\/([A-Za-z0-9_-]{11})/i,
+    /youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})/i,
+    /youtube\.com\/embed\/([A-Za-z0-9_-]{11})/i,
+    /youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/i
+  ];
+
+  for (const re of patterns) {
+    const m = u.match(re);
+    if (m?.[1]) return m[1];
+  }
+
+  return null;
+}
+
+function buildYouTubeStreams(
+  url,
+  episode,
+  title,
+  name = "KhmerDub",
+  group = "khmerdub"
+) {
+  const ytId = extractYouTubeId(url);
+  if (!ytId) return null;
+
+  const streamTitle = title || `Episode ${episode}`;
+
+  return [
+    {
+      ytId,
+      name,
+      title: streamTitle,
+      behaviorHints: { group }
+    },
+    {
+      externalUrl: `https://www.youtube.com/watch?v=${ytId}`,
+      name: `${name} YouTube`,
+      title: streamTitle,
+      behaviorHints: {
+        group,
+        notWebReady: true
+      }
+    }
+  ];
+}
+
+/* =========================
    PLAYER RESOLVE
 ========================= */
 async function resolvePlayerUrl(playerUrl) {
@@ -185,6 +237,8 @@ function buildStream(
 module.exports = {
   resolvePlayerUrl,
   resolveOkEmbed,
-  buildStream
+  buildStream,
+  extractYouTubeId,
+  buildYouTubeStreams
 
 };
