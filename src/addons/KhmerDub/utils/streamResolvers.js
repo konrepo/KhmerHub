@@ -223,6 +223,7 @@ function buildStream(
       : referer
         ? {
             group,
+            notWebReady: true,
             proxyHeaders: {
               request: {
                 Referer: referer,
