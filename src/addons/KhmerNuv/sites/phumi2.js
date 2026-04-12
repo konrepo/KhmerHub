@@ -297,7 +297,14 @@ async function getStream(prefix, seriesUrl, episode) {
       url = resolved || cleaned;
     }
 
-    return buildStream(url, episode, `Episode ${episode}`, "PhumiClub", "phumi2");
+    return buildStream(
+	  url, 
+	  episode, 
+	  `Episode ${episode}`, 
+	  "PhumiClub", 
+	  "phumi2",
+	  seriesUrl
+    );
   } catch (err) {
     console.log("[phumi2] getStream failed:", err.message);
     return null;
