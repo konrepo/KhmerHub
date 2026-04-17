@@ -1,7 +1,7 @@
 module.exports = (builder, deps) => {
   const { getSiteEngine, SITE_TYPES } = deps;
   const DEBUG = false;
-  const log = (...args) => DEBUG && log(...args);  
+  const log = (...args) => DEBUG && console.log(...args); 
 
   /* =========================
      META

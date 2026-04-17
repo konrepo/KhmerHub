@@ -5,7 +5,7 @@ const { normalizePoster, uniqById } = require("../utils/helpers");
 const { buildStream } = require("../utils/streamResolvers");
 
 const DEBUG = false;
-const log = (...args) => DEBUG && log(...args);
+const log = (...args) => DEBUG && console.log(...args);
   
 /* =========================
    CONFIG
