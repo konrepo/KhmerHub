@@ -49,9 +49,13 @@ module.exports = {
     ...albumSite,
     baseUrl: "https://www.khmeravenue.com/album/",
     genreUrls: {
+	  Classic: "https://www.khmeravenue.com/feature/classic/",
+      HK: "https://www.khmeravenue.com/country/hong-kong/",
+      Chinese: "https://www.khmeravenue.com/country/china/",	
       Modern: "https://www.khmeravenue.com/genre/modern/",
       China: "https://www.khmeravenue.com/genre/ancient/",
-      Korean: "https://www.khmeravenue.com/country/korea/"
+      Korean: "https://www.khmeravenue.com/country/korea/",
+      Kon: "https://www.khmeravenue.com/albumcategory/kon/"	  
     }
   },
 
@@ -61,7 +65,11 @@ module.exports = {
     genreUrls: {
       Khmer: "https://www.khmerdrama.com/country/cambodia/",
       Thai: "https://www.khmerdrama.com/country/thailand/",
-      Indian: "https://www.khmerdrama.com/country/india/"
+      Indian: "https://www.khmerdrama.com/country/india/",
+	  Philippines: "https://www.khmerdrama.com/country/philippines/",
+	  Thai-Boran: "https://www.khmerdrama.com/genre/thai-boran/",
+	  Horror: "https://www.khmerdrama.com/genre/horror/",
+	  Kon: "https://www.khmerdrama.com/albumcategory/kon/"
     }
   },
 
