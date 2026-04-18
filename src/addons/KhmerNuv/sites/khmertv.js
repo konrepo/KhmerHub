@@ -34,7 +34,7 @@ const CHANNELS = [
   {
     title: "TV9",
     link: "http://43.245.219.190:8183/CTV9HD@1.m3u8",
-    thumbnail: "http://1.bp.blogspot.com/-1QUe8XZ2qBE/UXLF8JpSlII/AAAAAAAAP5k/MREE15q7Rb0/s1600/khmer-tv9-online.png",
+    thumbnail: "https://raw.githubusercontent.com/goupon/file/refs/heads/master/logo/TV9.png",
     resolve: true
   },
   {
