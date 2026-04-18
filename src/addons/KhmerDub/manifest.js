@@ -61,7 +61,7 @@ module.exports = {
           extra: [
             { name: "search", isRequired: false },
             { name: "skip", isRequired: false },
-            { name: "genre", isRequired: false, options: ["Modern", "China", "Korean"] }
+            { name: "genre", isRequired: false, options: ["Classic", "HK", "Chinese", "Modern", "China", "Korean", "Kon"] }
           ]
         };
       }
@@ -74,7 +74,7 @@ module.exports = {
           extra: [
             { name: "search", isRequired: false },
             { name: "skip", isRequired: false },
-            { name: "genre", isRequired: false, options: ["Khmer", "Thai", "Indian"] }
+            { name: "genre", isRequired: false, options: ["Khmer", "Thai", "Indian", "Philippines", "Boran", "Horror", "Kon"] }
           ]
         };
       }

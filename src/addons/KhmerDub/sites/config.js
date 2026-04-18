@@ -67,7 +67,7 @@ module.exports = {
       Thai: "https://www.khmerdrama.com/country/thailand/",
       Indian: "https://www.khmerdrama.com/country/india/",
 	  Philippines: "https://www.khmerdrama.com/country/philippines/",
-	  Thai-Boran: "https://www.khmerdrama.com/genre/thai-boran/",
+	  Boran: "https://www.khmerdrama.com/genre/thai-boran/",
 	  Horror: "https://www.khmerdrama.com/genre/horror/",
 	  Kon: "https://www.khmerdrama.com/albumcategory/kon/"
     }
