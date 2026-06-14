@@ -382,9 +382,9 @@ async function getStream(prefix, seriesUrl, episode) {
 
     if (cand.includes("ok.ru")) {
 	  
-      //const direct = await resolveOkRuToDirect(cand, UA_MOB);
+      const direct = await resolveOkRuToDirect(cand, UA_MOB);
 	  
-      //if (!direct) return null;
+      if (!direct) return null;
 
       return {
         name: providerName,
