@@ -244,7 +244,8 @@ async function getEpisodes(prefix, seriesUrl) {
 
     return detail.videos.map((v, index) => ({
       id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${index + 1}`,
-      title: detail.title || v.title || `Episode ${index + 1}`,
+      title: `Episode ${String(index + 1).padStart(2, "0")}`,
+      seriesTitle: detail.title,
       season: 1,
       episode: index + 1,
       thumbnail: detail.thumbnail || "",
@@ -317,4 +318,3 @@ module.exports = {
   getStream,
   getNextPageUrl
 };
-
