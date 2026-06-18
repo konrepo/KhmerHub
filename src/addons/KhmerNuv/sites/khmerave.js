@@ -140,7 +140,7 @@ async function getEpisodes(prefix, seriesUrl) {
 
     return eps.map((e) => ({
       id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${e.epNumber}`,
-      title: pageTitle,
+      title: `Episode ${String(e.epNumber).padStart(2, "0")}`,
       season: 1,
       episode: e.epNumber,
       thumbnail: poster,
