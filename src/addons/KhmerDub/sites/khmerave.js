@@ -141,6 +141,7 @@ async function getEpisodes(prefix, seriesUrl) {
     return eps.map((e) => ({
       id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${e.epNumber}`,
       title: `Episode ${String(e.epNumber).padStart(2, "0")}`,
+      seriesTitle: pageTitle,
       season: 1,
       episode: e.epNumber,
       thumbnail: poster,
@@ -383,7 +384,14 @@ async function getStream(prefix, seriesUrl, episode) {
     if (cand.includes("ok.ru")) {
 	  
       const direct = await resolveOkRuToDirect(cand, UA_MOB);
-	  
+
+      console.log("OKRU_CAND =", cand);
+      console.log("OKRU_DIRECT =", direct);
+      console.log("OKRU_HEADERS =", {
+        Referer: "https://ok.ru/",
+        "User-Agent": UA_MOB
+      });
+
       if (!direct) return null;
 
       return {
@@ -426,4 +434,3 @@ module.exports = {
   getEpisodes,
   getStream,
 };
-
