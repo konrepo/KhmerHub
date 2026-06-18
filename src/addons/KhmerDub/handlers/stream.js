@@ -23,10 +23,6 @@ module.exports = (builder, deps) => {
         return { streams: [] };
       }
 
-      const siteType = SITE_TYPES[prefix] || SITE_TYPES.default;
-      const isSingleItem = siteType === "movie" || siteType === "channel";
-      const epNum = isSingleItem ? 1 : Number(parts[parts.length - 1]);
-
       if (!isSingleItem && (!Number.isInteger(epNum) || epNum <= 0)) {
         return { streams: [] };
       }
