@@ -16,6 +16,9 @@ module.exports = (builder, deps) => {
         ? parts.slice(1).join(":")
         : parts.slice(1, -2).join(":");
 
+      const seasonNum = isSingleItem ? 1 : Number(parts[parts.length - 2]);
+      const epNum = isSingleItem ? 1 : Number(parts[parts.length - 1]);
+
       if (!prefix || !encodedUrl) {
         return { streams: [] };
       }
