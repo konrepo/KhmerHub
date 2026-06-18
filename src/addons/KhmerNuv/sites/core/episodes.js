@@ -32,9 +32,16 @@ async function getEpisodes(prefix, seriesUrl) {
 
     const normalizedPoster = normalizePoster(pagePoster);
 
+    const pageTitle =
+      $("h1").first().text().trim() ||
+      $("meta[property='og:title']").attr("content") ||
+      $("title").text().trim() ||
+      seriesUrl;
+
     return urls.map((url, index) => ({
       id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${index + 1}`,
-      title: `Episode ${index + 1}`,
+      title: `Episode ${String(index + 1).padStart(2, "0")}`,
+      seriesTitle: pageTitle,
       season: 1,
       episode: index + 1,
       thumbnail: normalizedPoster,
@@ -62,7 +69,8 @@ async function getEpisodes(prefix, seriesUrl) {
 
   return urls.map((url, index) => ({
     id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${index + 1}`,
-    title: `Episode ${index + 1}`,
+    title: `Episode ${String(index + 1).padStart(2, "0")}`,
+    seriesTitle: detail.title,
     season: 1,
     episode: index + 1,
     thumbnail: detail.thumbnail,
