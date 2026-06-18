@@ -23,16 +23,17 @@ module.exports = (builder, deps) => {
       if (!episodes.length) return { meta: null };
 
       const first = episodes[0];
-
+      const seriesName = first.seriesTitle || first.name || first.title;
+      
       if (siteType === "movie" || siteType === "channel") {
         return {
           meta: {
             id,
             type: siteType,
-            name: first.title,
+            name: seriesName,
             poster: first.thumbnail,
             background: first.thumbnail,
-            description: first.title
+            description: seriesName
           },
         };
       }
@@ -41,9 +42,10 @@ module.exports = (builder, deps) => {
         meta: {
           id,
           type: siteType,
-          name: first.title,
+          name: seriesName,
           poster: first.thumbnail,
           background: first.thumbnail,
+          description: seriesName,
           videos: episodes,
         },
       };
