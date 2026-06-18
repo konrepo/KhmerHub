@@ -8,7 +8,13 @@ module.exports = (builder, deps) => {
     try {
       const parts = id.split(":");
       const prefix = parts[0];
-      const encodedUrl = parts[1];
+
+      const siteType = SITE_TYPES[prefix] || SITE_TYPES.default;
+      const isSingleItem = siteType === "movie" || siteType === "channel";
+
+      const encodedUrl = isSingleItem
+        ? parts.slice(1).join(":")
+        : parts.slice(1, -2).join(":");
 
       if (!prefix || !encodedUrl) {
         return { streams: [] };
