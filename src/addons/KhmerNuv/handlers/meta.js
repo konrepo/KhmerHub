@@ -33,6 +33,7 @@ module.exports = (builder, deps) => {
       if (!episodes.length) return { meta: null };
 
       const first = episodes[0];
+      const seriesName = first.seriesTitle || first.name || first.title;      
 
       /* =========================
          MOVIE / CHANNEL FIX
@@ -49,11 +50,11 @@ module.exports = (builder, deps) => {
           meta: {
             id: canonicalId,
             type: siteType,
-            name: first.title,
+            name: seriesName,
             poster: first.thumbnail,
             posterShape: "poster",
             background: first.thumbnail,
-            description: first.description || first.title,
+            description: seriesName,
             genres: first.genres || [],
             available: true,
             videos: [
@@ -69,15 +70,16 @@ module.exports = (builder, deps) => {
 
       /* =========================
          SERIES
-      ========================= */
+      ========================= */  
       return {
         meta: {
           id,
           type: siteType,
-          name: first.title,
+          name: seriesName,
           poster: first.thumbnail,
           posterShape: "poster",
           background: first.thumbnail,
+          description: seriesName,
           videos: episodes,
         },
       };
