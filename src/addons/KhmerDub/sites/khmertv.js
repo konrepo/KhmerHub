@@ -8,9 +8,9 @@ const CHANNELS = [
     resolve: true
   },
   {
-    title: "ETV",
-    link: "https://live-evg17.tv360.metfone.com.kh/LiveApp/streams/eacnews.m3u8",
-    thumbnail: "https://ia801501.us.archive.org/19/items/dog_gear_live_Logo/etv-channel.jpg",
+    title: "Fresh News",
+    link: "http://streaming-android.freshnewsasia.tv:1935/live/ngrp:myStream_all/playlist.m3u8",
+    thumbnail: "https://play-lh.googleusercontent.com/C-NSclauzPC-1i7ujfZsr79lzivtC9rHGj7HctTcIDwwI8WaF3AA2Vlp9C08J3y5PlIPdYl3fe3boj79Ell2TA=w240-h480-rw",
     resolve: true
   },    
   {
@@ -48,7 +48,25 @@ const CHANNELS = [
     link: "https://live.kh.malimarcdn.com/live/tvk2.stream/playlist.m3u8",
     thumbnail: "https://ia801501.us.archive.org/19/items/dog_gear_live_Logo/tvk-channel.png",
     resolve: true
-  }
+  },
+  {
+    title: "MOI",
+    link: "http://202.62.56.22:8080/hls/MOITV.m3u8",
+    thumbnail: "https://play-lh.googleusercontent.com/CyfGaIPD0-p0u0rMLKkbxS6VXWOh4wshdb9ZmighOUeZeWPviQK0HHjsXO3QYUPhgm2VQhKyt5Mw1TTMMg-w31I=w240-h480-rw",
+    resolve: true
+  }, 
+  {
+    title: "Sankem",
+    link: "https://live.sangkemtv.com/memfs/sangkem.m3u8",
+    thumbnail: "https://i.imgur.com/728fAcC.png",
+    resolve: true
+  },
+  {
+    title: "WiKi",
+    link: "https://stream.wikitv.asia/live/ngrp:myStream_all/playlist.m3u8",
+    thumbnail: "https://play-lh.googleusercontent.com/g3KXvbvwbuSuwZhm_RG--7rfCAvlnOsSzaLBFKd1XmRlHNxyvKzaf23GTmvsXm-OYg=w240-h480-rw",
+    resolve: true
+  }  
 ];
 
 function findChannelByUrl(url) {
