@@ -33,13 +33,17 @@ function extractEpisodeNumber(link, text = "") {
 
   if (link.includes("/album/")) return 1;
 
+  let m;
+
+  // Trust visible title first: "Episode 03"
+  m = String(text).match(/Episode\s*0*(\d+)/i);
+  if (m) return parseInt(m[1], 10);
+
   const slug = link
     .split("?")[0]
     .replace(/\/+$/, "")
     .split("/")
     .pop() || "";
-
-  let m;
 
   m = slug.match(/-(\d+)-end$/i);
   if (m) return parseInt(m[1], 10);
@@ -47,13 +51,10 @@ function extractEpisodeNumber(link, text = "") {
   m = slug.match(/-(\d+)e(?:-\d+)?$/i);
   if (m) return parseInt(m[1], 10);
 
-  m = slug.match(/-(\d+)-\d+$/i);
-  if (m) return parseInt(m[1], 10);
-
   m = slug.match(/-(\d+)$/i);
   if (m) return parseInt(m[1], 10);
 
-  m = String(text).match(/Episode\s*0*(\d+)/i);
+  m = slug.match(/-(\d+)-\d+$/i);
   if (m) return parseInt(m[1], 10);
 
   return 1;
