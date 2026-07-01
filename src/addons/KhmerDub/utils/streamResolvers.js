@@ -73,6 +73,46 @@ async function resolvePlayerUrl(playerUrl) {
   }
 }
 
+async function pickHighestHlsVariant(masterUrl) {
+  try {
+    const { data } = await axiosClient.get(masterUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Referer: "https://ok.ru/"
+      }
+    });
+
+    const lines = String(data || "").split(/\r?\n/);
+    let best = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const info = lines[i];
+      if (!info.startsWith("#EXT-X-STREAM-INF")) continue;
+
+      const next = lines[i + 1];
+      if (!next || next.startsWith("#")) continue;
+
+      const res = info.match(/RESOLUTION=(\d+)x(\d+)/i);
+      const height = res ? parseInt(res[2], 10) : 0;
+
+      let variantUrl;
+      try {
+        variantUrl = new URL(next.trim(), masterUrl).toString();
+      } catch {
+        continue;
+      }
+
+      if (!best || height > best.height) {
+        best = { height, url: variantUrl };
+      }
+    }
+
+    return best?.url || masterUrl;
+  } catch {
+    return masterUrl;
+  }
+}
+
 /* =========================
    RESOLVE OK
 ========================= */
@@ -122,13 +162,14 @@ async function resolveOkEmbed(embedUrl) {
       ];
 
       if (altMatches.length) {
-        return altMatches[altMatches.length - 1][1]
+        const okruUrl = altMatches[altMatches.length - 1][1]
           .replace(/\\u0026/g, "&")
           .replace(/\\&/g, "&")
           .replace(/\\\//g, "/")
           .replace(/&amp;/g, "&");
-      }
 
+        return await pickHighestHlsVariant(okruUrl);
+      }
       return null;
     }
 
@@ -170,8 +211,6 @@ async function resolveOkEmbed(embedUrl) {
             .replace(/\\&/g, "&")
             .replace(/\\\//g, "/")
             .replace(/&amp;/g, "&");
-
-          console.log("[resolveOkEmbed] metadata final", cleanUrl);
         }
       } catch {}
     }
@@ -182,9 +221,7 @@ async function resolveOkEmbed(embedUrl) {
       .replace(/\\\//g, "/")
       .replace(/&amp;/g, "&");
 
-    console.log("[resolveOkEmbed] final", cleanUrl);
-
-    return cleanUrl;
+    return await pickHighestHlsVariant(cleanUrl);
   } catch {
     return null;
   }
