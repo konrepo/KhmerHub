@@ -35,9 +35,11 @@ function extractEpisodeNumber(link, text = "") {
 
   let m;
 
-  // Trust visible title first: "Episode 03"
-  m = String(text).match(/Episode\s*0*(\d+)/i);
-  if (m) return parseInt(m[1], 10);
+  const textMatch = String(text).match(/Episode\s*0*(\d+)/i);
+  if (textMatch) {
+    const n = parseInt(textMatch[1], 10);
+    if (n > 0) return n;
+  }
 
   const slug = link
     .split("?")[0]
