@@ -198,6 +198,47 @@ function tryExtractVideoCandidateFromKhmerAvenue(html) {
   return null;
 }
 
+async function pickHighestHlsVariant(masterUrl, ua) {
+  try {
+    const { data } = await axios.get(masterUrl, {
+      headers: {
+        "User-Agent": ua,
+        Referer: "https://ok.ru/"
+      },
+      timeout: 15000
+    });
+
+    const lines = String(data || "").split(/\r?\n/);
+    let best = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const info = lines[i];
+      if (!info.startsWith("#EXT-X-STREAM-INF")) continue;
+
+      const next = lines[i + 1];
+      if (!next || next.startsWith("#")) continue;
+
+      const res = info.match(/RESOLUTION=(\d+)x(\d+)/i);
+      const height = res ? parseInt(res[2], 10) : 0;
+
+      let variantUrl;
+      try {
+        variantUrl = new URL(next.trim(), masterUrl).toString();
+      } catch {
+        continue;
+      }
+
+      if (!best || height > best.height) {
+        best = { height, url: variantUrl };
+      }
+    }
+
+    return best?.url || masterUrl;
+  } catch {
+    return masterUrl;
+  }
+}
+
 async function resolveOkRuToDirect(iframeUrl, ua) {
   try {
     const okUrl = normalizeOkUrl(iframeUrl);
@@ -215,27 +256,12 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
       html = String(html);
     }
 
-    // Decode escaped content
     html = html
       .replace(/\\&quot;/g, '"')
       .replace(/&quot;/g, '"')
       .replace(/\\u0026/g, "&")
       .replace(/\\&/g, "&")
       .replace(/\\\//g, "/");
-
-    const debugKeys = [
-      "ondemandHls",
-      "hlsMasterPlaylistUrl",
-      "hlsManifestUrl",
-      "metadataUrl",
-      "master.m3u8",
-      ".m3u8",
-      "videoSrc",
-      "flashvars",
-      "data-options",
-      "playerOptions",
-      "metadata"
-    ];
 
     let match = null;
 
@@ -274,17 +300,21 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
           .replace(/\\\//g, "/")
           .replace(/&amp;/g, "&");
 
-        return directUrl;
+        const picked = await pickHighestHlsVariant(directUrl, ua);
+        console.log("OKRU_PICKED_HIGHEST =", picked);
+
+        return picked;
       }
 
       return null;
     }
 
-    const cleanUrl = match[1]
+    let cleanUrl = match[1]
       .replace(/\\u0026/g, "&")
-      .replace(/\\&/g, "&");
+      .replace(/\\&/g, "&")
+      .replace(/\\\//g, "/")
+      .replace(/&amp;/g, "&");
 
-    // If this is a metadata URL, fetch real m3u8
     if (/metadata/i.test(cleanUrl) && /^https?:\/\//i.test(cleanUrl)) {
       try {
         const metaRes = await axios.get(cleanUrl, {
@@ -311,20 +341,21 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
           metaText.match(/"(https:\/\/[^"]+\.m3u8[^"]*)"/i);
 
         if (metaMatch?.[1]) {
-          const finalUrl = metaMatch[1]
+          cleanUrl = metaMatch[1]
             .replace(/\\u0026/g, "&")
             .replace(/\\&/g, "&")
-            .replace(/\\\//g, "/");
-
-          return finalUrl;
+            .replace(/\\\//g, "/")
+            .replace(/&amp;/g, "&");
         }
       } catch (e) {
         console.error("OK metadata resolver error:", e.response?.status || e.message);
       }
     }
 
-    return cleanUrl;
+    const picked = await pickHighestHlsVariant(cleanUrl, ua);
+    console.log("OKRU_PICKED_HIGHEST =", picked);
 
+    return picked;
   } catch (err) {
     console.error("OK resolver error:", err.response?.status || err.message);
     return null;
@@ -381,17 +412,8 @@ async function getStream(prefix, seriesUrl, episode) {
 
     const cand = normalizeOkUrl(candidate);
 
-    if (cand.includes("ok.ru")) {
-	  
+    if (cand.includes("ok.ru")) {	  
       const direct = await resolveOkRuToDirect(cand, UA_MOB);
-
-      console.log("OKRU_CAND =", cand);
-      console.log("OKRU_DIRECT =", direct);
-      console.log("OKRU_HEADERS =", {
-        Referer: "https://ok.ru/",
-        "User-Agent": UA_MOB
-      });
-
       if (!direct) return null;
 
       return {
