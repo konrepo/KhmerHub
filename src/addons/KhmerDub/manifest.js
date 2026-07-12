@@ -9,6 +9,7 @@ const sites = [
   { id: "phumi2", name: "PhumiClub", type: "series", enabled: true },
   { id: "khmerave", name: "KhmerAve", type: "series", enabled: true },
   { id: "merlkon", name: "Merlkon", type: "series", enabled: true },
+  { id: "v4khmer", name: "Video4Khmer", type: "series", enabled: true },
   { id: "idrama", name: "iDramaHD", type: "series", enabled: true }, 
   { id: "cat3movie", name: "Cat3Movie", type: "movie", enabled: false },
   { id: "xvideos", name: "xvideos", type: "movie", enabled: false }  
