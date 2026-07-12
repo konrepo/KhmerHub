@@ -17,7 +17,7 @@ const sites = [
 
 module.exports = {
   id: "community.khmer.dubbed",
-  version: "4.1.0",
+  version: "4.1.1",
   name: "KhmerDub",
   description: "Stream Asian dramas dubbed in Khmer (Stremio App) | Dev: TheDevilz.",
   logo: "https://avatars.githubusercontent.com/u/32822347?v=4",
