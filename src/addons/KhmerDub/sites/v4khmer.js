@@ -1,5 +1,6 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
+const { resolveScreenPal, buildStream } = require("../utils/streamResolvers");
 
 const UA_WIN =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36";
@@ -146,17 +147,22 @@ async function getStream(prefix, seriesUrl, episode) {
 
     if (!target?.file) return null;
 
-    const url = target.file.trim();
+    let url = target.file.trim();
 
-    return {
-      name: "Video4Khmer",
-      title: target.title || `Episode ${String(episode).padStart(2, "0")}`,
+    if (url.includes("go.screenpal.com")) {
+      const resolved = await resolveScreenPal(url);
+      if (!resolved) return null;
+      url = resolved;
+    }
+
+    return buildStream(
       url,
-      behaviorHints: {
-        group: prefix || "v4khmer",
-        notWebReady: true
-      }
-    };
+      episode,
+      target.title || `Episode ${String(episode).padStart(2, "0")}`,
+      "Video4Khmer",
+      prefix || "v4khmer",
+      "https://go.screenpal.com/"
+    );
   } catch (err) {
     console.error("v4khmer stream error:", err.message);
     return null;
