@@ -39,7 +39,15 @@ function parseVipBloggerContent(content = "") {
 
   for (const part of parts) {
     if (/^https?:\/\//i.test(part)) {
-      urls.push(part);
+      if (
+        /\.(mp4|m3u8)(\?|$)/i.test(part) ||
+        /ok\.ru\/videoembed\//i.test(part) ||
+        /dailymotion\.com\/embed\/video\//i.test(part) ||
+        /drive\.google\.com\/file\/d\//i.test(part) ||
+        /player\.php/i.test(part)
+      ) {
+        urls.push(part);
+      }
       continue;
     }
 
@@ -61,7 +69,7 @@ function parseVipBloggerContent(content = "") {
     }
   }
 
-  return [...new Set(urls)];
+  return urls.filter(Boolean);
 }
 
 module.exports = {
