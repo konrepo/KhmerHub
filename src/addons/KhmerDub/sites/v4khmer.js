@@ -79,7 +79,8 @@ async function getCatalogItems(prefix, siteConfig, url) {
         id: `${prefix}:${encodeURIComponent(link)}`,
         name: title,
         poster,
-        background: poster
+        background: poster,
+        fanart: poster
       });
     });
 
@@ -109,8 +110,9 @@ async function getEpisodes(prefix, seriesUrl) {
       seriesUrl;
 
     const poster = absUrl(
+      $("a.box1 img.thumnail").first().attr("src") ||
+      $("img.thumnail").first().attr("src") ||
       $("meta[property='og:image']").attr("content") ||
-      $(".content-right img").first().attr("src") ||
       ""
     );
 
@@ -124,6 +126,7 @@ async function getEpisodes(prefix, seriesUrl) {
       season: 1,
       episode: index + 1,
       thumbnail: poster,
+      background: poster,
       released: new Date().toISOString()
     }));
   } catch (err) {
