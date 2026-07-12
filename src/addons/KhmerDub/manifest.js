@@ -80,6 +80,19 @@ module.exports = {
         };
       }
 	  
+      if (site.id === "v4khmer") {
+        return {
+          type: site.type,
+          id: site.id,
+          name: site.name,
+          extra: [
+            { name: "search", isRequired: false },
+            { name: "skip", isRequired: false },
+            { name: "genre", isRequired: false, options: ["Korean", "Chinese", "Khmer"] }
+          ]
+        };
+      }	  
+	  
       if (site.id === "xvideos") {
         return {
           type: site.type,

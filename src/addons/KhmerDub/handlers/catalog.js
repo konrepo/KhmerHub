@@ -40,7 +40,7 @@ module.exports = (builder, deps) => {
       }
 
       // KhmetTv
-      if (id === "khmertv") {
+      if (id === "khmertv" || id === "english") {
         const skip = Number(extra?.skip || 0);
         if (skip > 0) return { metas: [] };
 
@@ -343,7 +343,49 @@ module.exports = (builder, deps) => {
         return { metas: mapMetas(uniq, type) };
       }	  
 	  
-      if (id === "phumi2" || id === "cat3movie" || id === "xvideos" || id === "v4khmer") {
+      // Video4Khmer
+      if (id === "v4khmer" && extra?.genre) {
+        const startUrl = site.genreUrls?.[extra.genre];
+        if (!startUrl) return { metas: [] };
+
+        const WEBSITE_PAGE_SIZE = site.pageSize || 40;
+        const PAGES_PER_BATCH = 3;
+
+        const skip = Number(extra?.skip || 0);
+        const targetPage = Math.floor(skip / WEBSITE_PAGE_SIZE) + 1;
+
+        let url = startUrl;
+        let currentPage = 1;
+        let allItems = [];
+
+        const base = String(site.baseUrl || "").replace(/\/$/, "");
+        const headers = {
+          "User-Agent":
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36",
+          Referer: `${base}/`,
+        };
+
+        while (currentPage < targetPage && url) {
+          const { data } = await axiosClient.get(url, { headers });
+          url = siteEngine.getNextPageUrl(base, data);
+          currentPage++;
+        }
+
+        for (let i = 0; i < PAGES_PER_BATCH && url; i++) {
+          const items = await siteEngine.getCatalogItems(id, site, url);
+          allItems.push(...items);
+
+          const { data } = await axiosClient.get(url, { headers });
+          url = siteEngine.getNextPageUrl(base, data);
+        }
+
+        const uniq = uniqById(allItems);
+        const type = SITE_TYPES[id] || SITE_TYPES.default;
+        return { metas: mapMetas(uniq, type) };
+      }
+	  
+	  // phumi2, cat3movie, xviceos
+      if (id === "phumi2" || id === "cat3movie" || id === "xvideos") {
         const base = String(site.baseUrl || "").replace(/\/$/, "");
 
         const startUrl = extra?.search
@@ -351,16 +393,12 @@ module.exports = (builder, deps) => {
             ? `${base}/?s=${encodeURIComponent(extra.search)}`
             : id === "xvideos"
               ? `${base}/?k=${encodeURIComponent(extra.search)}`
-              : id === "v4khmer"
-                ? `${base}/?search=${encodeURIComponent(extra.search)}`
-                : `${base}/search?q=${encodeURIComponent(extra.search)}&max-results=12`
+              : `${base}/search?q=${encodeURIComponent(extra.search)}&max-results=12`
           : id === "cat3movie"
             ? `${base}/`
             : id === "xvideos"
               ? `${base}/`
-              : id === "v4khmer"
-                ? `${base}/`
-                : `${base}/?max-results=12`;
+              : `${base}/?max-results=12`;
 
         const WEBSITE_PAGE_SIZE =
           site.pageSize || (id === "cat3movie" ? 40 : id === "xvideos" ? 27 : id === "v4khmer" ? 40 : 12);

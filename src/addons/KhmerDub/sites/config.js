@@ -90,7 +90,12 @@ module.exports = {
   v4khmer: {
     ...defaultSite,
     baseUrl: "https://video4khmer.cam/",
-    pageSize: 40
+    pageSize: 40,
+    genreUrls: {
+      Korean: "https://video4khmer.cam/?Category=Korean-Drama&Menu=29&Korean-Drama-Movie",
+      Chinese: "https://video4khmer.cam/?Category=Chinese-Drama&Menu=28&Chinese-Drama-Movie",
+      Khmer: "https://video4khmer.cam/?Category=Khmer-Drama&Menu=27&Khmer-Drama-Movie"
+    }
   },	
   
   cat3movie: {

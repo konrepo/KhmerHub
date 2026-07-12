@@ -61,6 +61,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
     });
 
     const $ = cheerio.load(data);
+
     const items = [];
 
     $("a.box1[href]").each((_, el) => {
