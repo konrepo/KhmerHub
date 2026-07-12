@@ -151,7 +151,7 @@ async function getStream(prefix, seriesUrl, episode) {
     return {
       name: "Video4Khmer",
       title: target.title || `Episode ${String(episode).padStart(2, "0")}`,
-      externalUrl: url,
+      url,
       behaviorHints: {
         group: prefix || "v4khmer",
         notWebReady: true
