@@ -343,7 +343,7 @@ module.exports = (builder, deps) => {
         return { metas: mapMetas(uniq, type) };
       }	  
 	  
-      if (id === "phumi2" || id === "cat3movie" || id === "xvideos") {
+      if (id === "phumi2" || id === "cat3movie" || id === "xvideos" || id === "v4khmer") {
         const base = String(site.baseUrl || "").replace(/\/$/, "");
 
         const startUrl = extra?.search
@@ -351,15 +351,19 @@ module.exports = (builder, deps) => {
             ? `${base}/?s=${encodeURIComponent(extra.search)}`
             : id === "xvideos"
               ? `${base}/?k=${encodeURIComponent(extra.search)}`
-              : `${base}/search?q=${encodeURIComponent(extra.search)}&max-results=12`
+              : id === "v4khmer"
+                ? `${base}/?search=${encodeURIComponent(extra.search)}`
+                : `${base}/search?q=${encodeURIComponent(extra.search)}&max-results=12`
           : id === "cat3movie"
             ? `${base}/`
             : id === "xvideos"
               ? `${base}/`
-              : `${base}/?max-results=12`;
+              : id === "v4khmer"
+                ? `${base}/`
+                : `${base}/?max-results=12`;
 
         const WEBSITE_PAGE_SIZE =
-          site.pageSize || (id === "cat3movie" ? 40 : id === "xvideos" ? 27 : 12);
+          site.pageSize || (id === "cat3movie" ? 40 : id === "xvideos" ? 27 : id === "v4khmer" ? 40 : 12);
 
         const PAGES_PER_BATCH = 3;
 

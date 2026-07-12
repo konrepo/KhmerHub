@@ -50,7 +50,9 @@ function extractPlayerList(html = "") {
 ========================= */
 async function getCatalogItems(prefix, siteConfig, url) {
   try {
-    const { data } = await axios.get(url || BASE, {
+    const finalUrl = url || siteConfig.baseUrl || BASE;
+
+    const { data } = await axios.get(finalUrl, {
       headers: { "User-Agent": UA_WIN, Referer: BASE },
       timeout: 15000
     });
@@ -169,7 +171,6 @@ function getNextPageUrl(base, html) {
       .filter((_, el) => /next/i.test($(el).text()))
       .first()
       .attr("href") ||
-    $("a[href*='page=']").last().attr("href") ||
     "";
 
   return next ? absUrl(next) : null;
