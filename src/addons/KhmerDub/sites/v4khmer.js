@@ -2,6 +2,8 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const { resolveScreenPal, buildStream } = require("../utils/streamResolvers");
 
+const V4_INFO = new Map();
+
 const UA_WIN =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36";
 const UA_MOB =
@@ -75,6 +77,11 @@ async function getCatalogItems(prefix, siteConfig, url) {
 
       if (!link || !title) return;
 
+      V4_INFO.set(link, {
+        title,
+        poster
+      });
+
       items.push({
         id: `${prefix}:${encodeURIComponent(link)}`,
         name: title,
@@ -102,19 +109,22 @@ async function getEpisodes(prefix, seriesUrl) {
     });
 
     const $ = cheerio.load(data);
+    const cached = V4_INFO.get(seriesUrl) || {};
 
     const pageTitle =
+      cached.title ||
       cleanTitle($(".viewer .dt h3").first().text().replace(/^.*Video Title:\s*/i, "")) ||
       cleanTitle($("h1").first().text()) ||
       cleanTitle($("title").text()) ||
       seriesUrl;
 
-    const poster = absUrl(
-      $("a.box1 img.thumnail").first().attr("src") ||
-      $("img.thumnail").first().attr("src") ||
-      $("meta[property='og:image']").attr("content") ||
-      ""
-    );
+    const poster =
+      cached.poster ||
+      absUrl(
+        $("img.thumnail").first().attr("src") ||
+        $("meta[property='og:image']").attr("content") ||
+        ""
+      );
 
     const players = extractPlayerList(String(data || ""));
     if (!players.length) return [];
