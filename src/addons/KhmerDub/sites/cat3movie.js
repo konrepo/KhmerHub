@@ -19,9 +19,18 @@ const HEADERS = {
 ========================= */
 function absolutize(url, base = BASE_URL) {
   try {
+    if (!url) return "";
     return new URL(url, base).toString();
   } catch {
     return url;
+  }
+}
+
+function safeDecode(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
 }
 
@@ -42,8 +51,45 @@ function uniq(arr) {
   return [...new Set(arr.filter(Boolean))];
 }
 
+function normalizeStreamSource(src) {
+  if (!src) return null;
+
+  if (typeof src === "string") {
+    return {
+      url: src.trim()
+    };
+  }
+
+  if (src.url) {
+    return {
+      url: String(src.url).trim(),
+      subtitle: src.subtitle,
+      language: src.language
+    };
+  }
+
+  return null;
+}
+
+function uniqStreamSources(items) {
+  const seen = new Set();
+  const out = [];
+
+  for (const item of items) {
+    const src = normalizeStreamSource(item);
+    if (!src?.url) continue;
+    if (seen.has(src.url)) continue;
+
+    seen.add(src.url);
+    out.push(src);
+  }
+
+  return out;
+}
+
 async function resolveCat3Embed(embedUrl) {
   try {
+    embedUrl = safeDecode(embedUrl);
 
     const { data } = await axiosClient.get(embedUrl, {
       headers: {
@@ -52,21 +98,29 @@ async function resolveCat3Embed(embedUrl) {
       }
     });
 
+    let html = String(data || "")
+      .replace(/\\\//g, "/")
+      .replace(/&amp;/g, "&");
+
+    const direct = [
+      ...html.matchAll(/https?:\/\/[^"'<> ]+\.(?:m3u8|mp4)(?:\?[^"'<> ]*)?/gi)
+    ].map(m => m[0]);
+
+    if (direct.length) return uniq(direct);
+
     const apiMatch =
-      data.match(/url\s*:\s*"([^"]*\/api\/\?[^"]+)"/i) ||
-      data.match(/url\s*:\s*'([^']*\/api\/\?[^']+)'/i);
+      html.match(/url\s*:\s*"([^"]*\/api\/\?[^"]+)"/i) ||
+      html.match(/url\s*:\s*'([^']*\/api\/\?[^']+)'/i);
 
-    if (!apiMatch || !apiMatch[1]) {
-      return [];
-    }
+    if (!apiMatch?.[1]) return [];
 
-    const apiUrl = apiMatch[1].replace(/\\\//g, "/");
+    const apiUrl = absolutize(apiMatch[1], embedUrl);
 
     const { data: apiRes } = await axiosClient.get(apiUrl, {
       headers: {
         ...HEADERS,
         Referer: embedUrl,
-        Origin: "https://play.cat3movie.club",
+        Origin: new URL(embedUrl).origin,
         Accept: "application/json, text/plain, */*",
         "X-Requested-With": "XMLHttpRequest"
       }
@@ -75,11 +129,12 @@ async function resolveCat3Embed(embedUrl) {
     const rawSources =
       apiRes?.sources ||
       apiRes?.data?.sources ||
+      apiRes?.result?.sources ||
       [];
 
     const sources = Array.isArray(rawSources)
       ? rawSources
-          .map((s) => {
+          .map(s => {
             if (typeof s === "string") return s;
             return s?.file || s?.src || s?.url || "";
           })
@@ -88,6 +143,72 @@ async function resolveCat3Embed(embedUrl) {
 
     return uniq(sources);
   } catch (e) {
+    console.log("[cat3] embed error:", e.message);
+    return [];
+  }
+}
+
+async function resolveVivamaxMovie(movieUrl) {
+  try {
+    movieUrl = safeDecode(movieUrl);
+
+    const slug = movieUrl
+      .replace(/\/$/, "")
+      .split("/")
+      .pop();
+
+    if (!slug) return [];
+
+    const apiUrl =
+      `https://vivamax.cam/api/movies.php?find_slug=${encodeURIComponent(slug)}&paginated=1`;
+
+    console.log("[cat3] vivamax api:", apiUrl);
+
+    const { data } = await axiosClient.get(apiUrl, {
+      headers: {
+        ...HEADERS,
+        Referer: "https://vivamax.cam/",
+        Origin: "https://vivamax.cam",
+        Accept: "application/json, text/plain, */*"
+      }
+    });
+
+    const movie = data?.data?.[0];
+
+    if (!movie) {
+      console.log("[cat3] vivamax no movie:", slug);
+      return [];
+    }
+
+    let servers = movie.servers;
+
+    if (typeof servers === "string") {
+      servers = JSON.parse(servers);
+    }
+
+    const sources = [];
+
+    for (const server of servers || []) {
+      for (const ep of server.episodes || []) {
+        if (!ep.url) continue;
+
+        const [videoUrl, language, subtitleUrl] = String(ep.url).split("|");
+
+        if (videoUrl) {
+          sources.push({
+            url: videoUrl.trim(),
+            subtitle: subtitleUrl?.trim(),
+            language: language || "English"
+          });
+        }
+      }
+    }
+
+    console.log("[cat3] vivamax sources:", sources.length);
+
+    return sources;
+  } catch (e) {
+    console.log("[cat3] vivamax error:", e.message);
     return [];
   }
 }
@@ -97,7 +218,7 @@ async function resolveCat3Embed(embedUrl) {
 ========================= */
 function extractSources(html) {
   const sources = [
-    ...html.matchAll(/file\s*:\s*["']([^"']+)["']/gi)
+    ...String(html || "").matchAll(/file\s*:\s*["']([^"']+)["']/gi)
   ]
     .map(m => String(m[1] || "").trim())
     .filter(url =>
@@ -130,6 +251,7 @@ function extractServerLinks(html, pageUrl) {
 ========================= */
 async function getDetail(url) {
   try {
+    url = safeDecode(url);
 
     const { data } = await axiosClient.get(url, {
       headers: HEADERS
@@ -166,8 +288,7 @@ async function getDetail(url) {
       category,
       sources
     };
-	
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -217,7 +338,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
         id: `${prefix}:${encodeURIComponent(link)}`,
         name: category ? `[${category}] ${title}` : title,
         poster,
-		genres: category ? [category] : []
+        genres: category ? [category] : []
       };
     });
 
@@ -241,9 +362,11 @@ function getNextPageUrl(base, html) {
 }
 
 /* =========================
-   EPISODES (single movie)
+   EPISODES
 ========================= */
 async function getEpisodes(prefix, url) {
+  url = safeDecode(url);
+
   const detail = await getDetail(url);
 
   if (!detail) return [];
@@ -264,26 +387,58 @@ async function getEpisodes(prefix, url) {
    STREAM
 ========================= */
 async function getStream(prefix, url, epNum = 1) {
-
   try {
-    const detail = await getDetail(url);
+    url = safeDecode(url);
 
-    const { data } = await axiosClient.get(url, {
-      headers: HEADERS
+    const res = await axiosClient.get(url, {
+      headers: HEADERS,
+      maxRedirects: 5
     });
 
-    const serverLinks = extractServerLinks(data, url);
+    const data = res.data;
+
+    const finalPageUrl = safeDecode(
+      res.request?.res?.responseUrl ||
+      res.request?.responseURL ||
+      url
+    );
+
+    const detail = await getDetail(finalPageUrl);
+
+    const serverLinks = extractServerLinks(data, finalPageUrl);
 
     const finalSources = [...(detail?.sources || [])];
 
+    const vivamaxLinks = [
+      ...String(data || "").matchAll(/https?:\/\/vivamax\.cam\/movies\/[^"'<> ]+/gi)
+    ].map(m => m[0]);
+
+    for (const vivamaxUrl of uniq(vivamaxLinks)) {
+      const sources = await resolveVivamaxMovie(vivamaxUrl);
+      finalSources.push(...sources);
+    }
+
+    if (/vivamax\.cam\/movies\//i.test(finalPageUrl)) {
+      const sources = await resolveVivamaxMovie(finalPageUrl);
+      finalSources.push(...sources);
+    }
+
     for (const serverUrl of serverLinks) {
-	  
       if (/\.(m3u8|mp4)(\?|$)/i.test(serverUrl)) {
         finalSources.push(serverUrl);
         continue;
       }
 
-      if (/play\.cat3movie\.club\/embed\//i.test(serverUrl)) {
+      if (/vivamax\.cam\/movies\//i.test(serverUrl)) {
+        const sources = await resolveVivamaxMovie(serverUrl);
+        finalSources.push(...sources);
+        continue;
+      }
+
+      if (
+        /play\.cat3movie\.club\/embed\//i.test(serverUrl) ||
+        /vivamax\.cam\/(embed|player|api)\//i.test(serverUrl)
+      ) {
         const embedSources = await resolveCat3Embed(serverUrl);
         finalSources.push(...embedSources);
         continue;
@@ -295,20 +450,45 @@ async function getStream(prefix, url, epNum = 1) {
       }
     }
 
-    const uniqueSources = uniq(finalSources);
+    if (!finalSources.length) {
+      const slug = url
+        .replace(/\/$/, "")
+        .split("/")
+        .pop();
+
+      const fallbackSources = await resolveVivamaxMovie(
+        `https://vivamax.cam/movies/${slug}`
+      );
+
+      finalSources.push(...fallbackSources);
+    }
+
+    const uniqueSources = uniqStreamSources(finalSources);
+
+    console.log("[cat3] total sources:", uniqueSources.length);
 
     if (!uniqueSources.length) return null;
 
-    return uniqueSources.map((src, index) =>
-      buildStream(
-        src,
+    return uniqueSources.map((src, index) => ({
+      ...buildStream(
+        src.url,
         epNum,
         detail?.title || "Cat3Movie",
         uniqueSources.length > 1 ? `Server ${index + 1}` : "Cat3Movie",
-        "cat3"
-      )
-    );
+        "cat3",
+        /1a-1791\.com/i.test(src.url) ? "https://vivamax.cam/" : null
+      ),
+      subtitles: src.subtitle
+        ? [
+            {
+              url: src.subtitle,
+              lang: src.language || "English"
+            }
+          ]
+        : undefined
+    }));
   } catch (e) {
+    console.log("[cat3] stream error:", e.message);
     return null;
   }
 }
@@ -318,5 +498,4 @@ module.exports = {
   getEpisodes,
   getStream,
   getNextPageUrl
-
 };
