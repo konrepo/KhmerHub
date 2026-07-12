@@ -227,6 +227,16 @@ async function resolveOkEmbed(embedUrl) {
   }
 }
 
+async function resolveScreenPal(url) {
+  const match =
+    url.match(/go\.screenpal\.com\/watch\/([A-Za-z0-9]+)/i) ||
+    url.match(/go\.screenpal\.com\/player\/([A-Za-z0-9]+)/i);
+
+  if (!match) return null;
+
+  return `https://go.screenpal.com/player/stream/${match[1]}`;
+}
+
 /* =========================
    BUILD STREAM
 ========================= */
@@ -275,8 +285,8 @@ function buildStream(
 module.exports = {
   resolvePlayerUrl,
   resolveOkEmbed,
+  resolveScreenPal,
   buildStream,
   extractYouTubeId,
   buildYouTubeStreams
-
 };
