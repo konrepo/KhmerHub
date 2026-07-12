@@ -86,6 +86,12 @@ module.exports = {
       Korean: "https://www.idramahd.com/korean-drama/"
 	}
   },
+
+  v4khmer: {
+    ...defaultSite,
+    baseUrl: "https://video4khmer.cam/",
+    pageSize: 40
+  },	
   
   cat3movie: {
     ...defaultSite,
