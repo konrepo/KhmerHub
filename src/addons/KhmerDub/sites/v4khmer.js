@@ -1,6 +1,7 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
-const { resolveScreenPal, buildStream } = require("../utils/streamResolvers");
+
+const { resolveScreenPal, resolveOkEmbed, buildStream } = require("../utils/streamResolvers");
 
 const V4_INFO = new Map();
 
@@ -162,11 +163,20 @@ async function getStream(prefix, seriesUrl, episode) {
     if (!target?.file) return null;
 
     let url = target.file.trim();
+    let referer = null;
 
     if (url.includes("go.screenpal.com")) {
       const resolved = await resolveScreenPal(url);
       if (!resolved) return null;
       url = resolved;
+      referer = "https://go.screenpal.com/";
+    }
+
+    if (/ok\.ru\/videoembed/i.test(url)) {
+      const resolved = await resolveOkEmbed(url);
+      if (!resolved) return null;
+      url = resolved;
+      referer = "https://ok.ru/";
     }
 
     return buildStream(
@@ -175,7 +185,7 @@ async function getStream(prefix, seriesUrl, episode) {
       target.title || `Episode ${String(episode).padStart(2, "0")}`,
       "Video4Khmer",
       prefix || "v4khmer",
-      "https://go.screenpal.com/"
+      referer
     );
   } catch (err) {
     console.error("v4khmer stream error:", err.message);
