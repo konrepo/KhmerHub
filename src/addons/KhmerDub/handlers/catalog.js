@@ -344,8 +344,15 @@ module.exports = (builder, deps) => {
       }	  
 	  
       // Video4Khmer
-      if (id === "v4khmer" && extra?.genre) {
-        const startUrl = site.genreUrls?.[extra.genre];
+      if (id === "v4khmer") {
+        const base = String(site.baseUrl || "").replace(/\/$/, "");
+
+        const startUrl = extra?.genre
+          ? site.genreUrls?.[extra.genre]
+          : extra?.search
+            ? `${base}/?search=${encodeURIComponent(extra.search)}`
+            : `${base}/`;
+
         if (!startUrl) return { metas: [] };
 
         const WEBSITE_PAGE_SIZE = site.pageSize || 40;
@@ -358,7 +365,6 @@ module.exports = (builder, deps) => {
         let currentPage = 1;
         let allItems = [];
 
-        const base = String(site.baseUrl || "").replace(/\/$/, "");
         const headers = {
           "User-Agent":
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36",
@@ -383,6 +389,8 @@ module.exports = (builder, deps) => {
         const type = SITE_TYPES[id] || SITE_TYPES.default;
         return { metas: mapMetas(uniq, type) };
       }
+	  
+	  
 	  
 	  // phumi2, cat3movie, xviceos
       if (id === "phumi2" || id === "cat3movie" || id === "xvideos") {

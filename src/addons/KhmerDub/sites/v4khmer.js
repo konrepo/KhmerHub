@@ -188,12 +188,11 @@ function getNextPageUrl(base, html) {
 
   const next =
     $("ul.pagination a")
-      .filter((_, el) => /next/i.test($(el).text()))
+      .filter((_, el) => /next/i.test($(el).text().trim()))
       .first()
-      .attr("href") ||
-    "";
+      .attr("href") || "";
 
-  return next ? absUrl(next) : null;
+  return next ? new URL(next, base).toString() : null;
 }
 
 module.exports = {
