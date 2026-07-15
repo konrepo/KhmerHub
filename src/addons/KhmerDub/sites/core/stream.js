@@ -13,6 +13,86 @@ const { fetchVipWordpressDetail } = require("./wordpress");
 const FILE_REGEX =
   /file\s*:\s*["'](https?:\/\/[^"']+\.mp4(?:\?[^"']+)?)["']/gi;
 
+function extractKhmerDramaUrl(html = "") {
+  const text = String(html || "")
+    .replace(/\\\//g, "/")
+    .replace(/&amp;/g, "&");
+
+  const match = text.match(
+    /https?:\/\/video4khmer\.khmerdrama\.org\/(?:tv-series|movies)\/[^"'<>\\\s]+/i
+  );
+
+  return match ? match[0] : null;
+}
+
+async function fetchKhmerDramaDetail(khmerDramaUrl) {
+  const slug = new URL(khmerDramaUrl).pathname
+    .split("/")
+    .filter(Boolean)
+    .pop();
+
+  const apiUrl =
+    `https://video4khmer.khmerdrama.org/api/movies.php?find_slug=${encodeURIComponent(slug)}&paginated=1`;
+
+  const { data } = await axiosClient.get(apiUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+      Referer: khmerDramaUrl
+    }
+  });
+
+  const found = Array.isArray(data?.data) ? data.data[0] : data?.data;
+  if (!found) return null;
+
+  let servers = [];
+  try {
+    servers = typeof found.servers === "string"
+      ? JSON.parse(found.servers)
+      : found.servers || [];
+  } catch {
+    servers = [];
+  }
+
+  const episodeMap = new Map();
+
+  servers.forEach((server) => {
+    const episodes = Array.isArray(server.episodes) ? server.episodes : [];
+
+    episodes.forEach((ep, index) => {
+      const epName =
+        typeof ep === "object" && ep?.episode_name
+          ? String(ep.episode_name).trim()
+          : String(index + 1);
+
+      const epUrl =
+        typeof ep === "string"
+          ? ep
+          : ep?.url || ep?.file || ep?.src || "";
+
+      if (!episodeMap.has(epName)) {
+        episodeMap.set(epName, epUrl || "");
+      } else if (!episodeMap.get(epName) && epUrl) {
+        episodeMap.set(epName, epUrl);
+      }
+    });
+  });
+
+  const urls = [...episodeMap.entries()]
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([, url]) => url)
+    .filter(Boolean);
+
+  if (!urls.length) return null;
+
+  return {
+    title: found.phoneticTitle || found.title || "PhumiVIP",
+    thumbnail: found.poster || found.backdrop || "",
+    urls,
+    maxEp: urls.length,
+    sourceType: "khmerdrama-api"
+  };
+}
+
 /* =========================
    STREAM DETAIL
 ========================= */
@@ -41,13 +121,40 @@ async function getStreamDetail(postId, seriesUrl = "") {
     }
   }
 
+  if (seriesUrl) {
+    try {
+      const { data } = await axiosClient.get(seriesUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Referer: seriesUrl
+        }
+      });
+
+      const khmerDramaUrl = extractKhmerDramaUrl(data);
+
+      if (khmerDramaUrl) {
+        const kdDetail = await fetchKhmerDramaDetail(khmerDramaUrl);
+
+        if (
+          kdDetail &&
+          Array.isArray(kdDetail.urls) &&
+          (!detail || kdDetail.urls.length > (detail.urls?.length || 0))
+        ) {
+          detail = kdDetail;
+        }
+      }
+    } catch {}
+  }
+
   if (!detail) {
     return null;
   }
 
   POST_INFO.set(postId, {
     ...(POST_INFO.get(postId) || {}),
-    detail
+    detail,
+    maxEp: detail.maxEp || POST_INFO.get(postId)?.maxEp || null,
+    sourceType: detail.sourceType || POST_INFO.get(postId)?.sourceType
   });
 
   return detail;
@@ -73,7 +180,6 @@ async function getStream(prefix, seriesUrl, episode) {
   const providerName = providerNames[prefix] || "KhmerDub";
   const groupName = prefix || "khmerdub";
 
-  // Sunday fallback streaming
   if (prefix === "sunday" && !postId) {
     const { data } = await axiosClient.get(seriesUrl, {
       headers: {
@@ -100,7 +206,6 @@ async function getStream(prefix, seriesUrl, episode) {
 
   let detail = await getStreamDetail(postId, seriesUrl);
 
-  // vip direct fallback
   if (!detail && prefix === "vip") {
     try {
       const { data } = await axiosClient.get(seriesUrl, {
@@ -138,11 +243,6 @@ async function getStream(prefix, seriesUrl, episode) {
     url = resolved;
   }
 
-  console.log("[VIP final stream url]", {
-    episode,
-    url
-  });
-
   return buildStream(
     url,
     episode,
@@ -150,7 +250,7 @@ async function getStream(prefix, seriesUrl, episode) {
     providerName,
     groupName,
     seriesUrl || "https://phumikhmer.vip/"
-  );  
+  );
 }
 
 module.exports = {
