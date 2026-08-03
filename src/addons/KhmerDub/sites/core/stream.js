@@ -19,20 +19,24 @@ function extractKhmerDramaUrl(html = "") {
     .replace(/&amp;/g, "&");
 
   const match = text.match(
-    /https?:\/\/video4khmer\.khmerdrama\.org\/(?:tv-series|movies)\/[^"'<>\\\s]+/i
+    /https?:\/\/(?:video4khmer\.khmerdrama\.org|khmermove\.cinaze\.com)\/(?:tv-series|movies)\/[^"'<>\\\s]+/i
   );
 
   return match ? match[0] : null;
 }
 
 async function fetchKhmerDramaDetail(khmerDramaUrl) {
-  const slug = new URL(khmerDramaUrl).pathname
+  const parsedUrl = new URL(khmerDramaUrl);
+
+  const slug = parsedUrl.pathname
     .split("/")
     .filter(Boolean)
     .pop();
 
+  const origin = parsedUrl.origin;
+
   const apiUrl =
-    `https://video4khmer.khmerdrama.org/api/movies.php?find_slug=${encodeURIComponent(slug)}&paginated=1`;
+    `${origin}/api/movies.php?find_slug=${encodeURIComponent(slug)}&paginated=1`;
 
   const { data } = await axiosClient.get(apiUrl, {
     headers: {
