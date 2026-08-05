@@ -35,15 +35,27 @@ module.exports = {
 	}	
   },
   
-  phumi2: {
-	pageSize: 12, 
-    baseUrl: "https://www.phumikhmer1.club/",
+  v4khmer: {
+    ...defaultSite,
+    baseUrl: "https://video4khmer.cam/",
+    pageSize: 40,
     genreUrls: {
-      Khmer: "https://www.phumikhmer1.club/search/label/Khmer?&max-results=24",
-      China: "https://www.phumikhmer1.club/search/label/Chinese?&max-results=24",
-      Korean: "https://www.phumikhmer1.club/search/label/Korea?&max-results=24"
-    }	
-  },  
+      Korean: "https://video4khmer.cam/?Category=Korean-Drama&Menu=29&Korean-Drama-Movie",
+      Chinese: "https://video4khmer.cam/?Category=Chinese-Drama&Menu=28&Chinese-Drama-Movie",
+      Khmer: "https://video4khmer.cam/?Category=Khmer-Drama&Menu=27&Khmer-Drama-Movie"
+    }
+  },	
+  
+  thekomsan: {
+    ...albumSite,
+    pageSize: 20,
+    baseUrl: "https://www.thekomsan.com",
+    genreUrls: {
+	  OnAir: "https://www.thekomsan.com/search/label/On%20Air?max-results=20",
+	  Chinese: "https://www.thekomsan.com/search/label/Chinese?max-results=20",
+	  Korean: "https://www.thekomsan.com/search/label/Korean?max-results=20"
+    }
+  }, 
 
   khmerave: {
     ...albumSite,
@@ -86,17 +98,6 @@ module.exports = {
       Korean: "https://www.idramahd.com/korean-drama/"
 	}
   },
-
-  v4khmer: {
-    ...defaultSite,
-    baseUrl: "https://video4khmer.cam/",
-    pageSize: 40,
-    genreUrls: {
-      Korean: "https://video4khmer.cam/?Category=Korean-Drama&Menu=29&Korean-Drama-Movie",
-      Chinese: "https://video4khmer.cam/?Category=Chinese-Drama&Menu=28&Chinese-Drama-Movie",
-      Khmer: "https://video4khmer.cam/?Category=Khmer-Drama&Menu=27&Khmer-Drama-Movie"
-    }
-  },	
   
   cat3movie: {
     ...defaultSite,
@@ -156,7 +157,7 @@ module.exports = {
   },
 
   khmertv: {
-	pageSize: 8,  
+	pageSize: 11,  
     baseUrl: ""
   },  
   
