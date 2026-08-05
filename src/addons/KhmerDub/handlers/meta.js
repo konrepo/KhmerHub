@@ -19,7 +19,7 @@ module.exports = (builder, deps) => {
       const siteType = SITE_TYPES[prefix] || SITE_TYPES.default;
       const seriesUrl = decodeURIComponent(encodedUrl);
 
-      const episodes = await siteEngine.getEpisodes(prefix, seriesUrl);
+      const episodes = await siteEngine.getEpisodes(prefix, seriesUrl);      
       if (!episodes.length) return { meta: null };
 
       const first = episodes[0];
@@ -37,7 +37,7 @@ module.exports = (builder, deps) => {
           },
         };
       }
-
+      
       return {
         meta: {
           id,
@@ -50,6 +50,13 @@ module.exports = (builder, deps) => {
         },
       };
     } catch (err) {
+      console.error("[meta] failed:", {
+        id,
+        message: err?.message,
+        status: err?.response?.status,
+        url: err?.config?.url
+      });
+
       return { meta: null };
     }
   });
