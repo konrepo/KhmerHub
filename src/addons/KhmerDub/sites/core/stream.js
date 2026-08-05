@@ -115,7 +115,7 @@ async function getStreamDetail(postId, seriesUrl = "") {
         fetchFromBlog(blogId, postId)
       )
     );
-
+    
     const validResults = results.filter(
       (item) => item && Array.isArray(item.urls) && item.urls.length
     );
@@ -127,14 +127,21 @@ async function getStreamDetail(postId, seriesUrl = "") {
 
   if (seriesUrl) {
     try {
-      const { data } = await axiosClient.get(seriesUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          Referer: seriesUrl
-        }
-      });
+      let pageHtml = cached?.pageHtml || "";
 
-      const khmerDramaUrl = extractKhmerDramaUrl(data);
+      // Only fetch when getPostId did not already cache the page.
+      if (!pageHtml) {
+        const { data } = await axiosClient.get(seriesUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0",
+            Referer: seriesUrl
+          }
+        });
+
+        pageHtml = data || "";
+      }
+
+      const khmerDramaUrl = extractKhmerDramaUrl(pageHtml);
 
       if (khmerDramaUrl) {
         const kdDetail = await fetchKhmerDramaDetail(khmerDramaUrl);
