@@ -6,7 +6,8 @@ const sites = [
   { id: "khmertv", name: "KhmerTV", type: "channel", enabled: true }, 
   { id: "vip", name: "PhumiVip", type: "series", enabled: true },
   { id: "sunday", name: "SundayDrama", type: "series", enabled: true },
-  { id: "phumi2", name: "PhumiClub", type: "series", enabled: true },
+  { id: "thekomsan", name: "TheKomsan", type: "series", enabled: true },	
+  { id: "phumi2", name: "PhumiClub", type: "series", enabled: false },
   { id: "khmerave", name: "KhmerAve", type: "series", enabled: true },
   { id: "merlkon", name: "Merlkon", type: "series", enabled: true },
   { id: "v4khmer", name: "Video4Khmer", type: "series", enabled: false },
@@ -17,7 +18,7 @@ const sites = [
 
 module.exports = {
   id: "community.khmer.dubbed",
-  version: "4.1.1",
+  version: "4.5.2",
   name: "KhmerDub",
   description: "Stream Asian dramas dubbed in Khmer (Stremio App) | Dev: TheDevilz.",
   logo: "https://avatars.githubusercontent.com/u/32822347?v=4",
@@ -49,10 +50,23 @@ module.exports = {
           extra: [
             { name: "search", isRequired: false },
             { name: "skip", isRequired: false },
-            { name: "genre", isRequired: false, options: ["Khmer", "China", "Korean"] }
+            { name: "genre", isRequired: false, options: ["OnAir", "China", "Korean"] }
           ]
         };
-      }
+      }		  
+
+      if (site.id === "thekomsan") {
+        return {
+          type: site.type,
+          id: site.id,
+          name: site.name,
+          extra: [
+            { name: "search", isRequired: false },
+            { name: "skip", isRequired: false },
+            { name: "genre", isRequired: false, options: ["OnAir", "Chinese", "Korean"] }
+          ]
+        };
+      }	
 
       if (site.id === "khmerave") {
         return {
