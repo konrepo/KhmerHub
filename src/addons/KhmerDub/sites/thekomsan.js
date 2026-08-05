@@ -371,7 +371,7 @@ function parseVideosArray(html, pageUrl = BASE_URL) {
     });
 
     return uniqueVideos;
-  } catch (err) {
+  } catch {
     return [];
   }
 }
