@@ -225,7 +225,11 @@ function extractSources(html) {
       url &&
       url !== "#" &&
       /^https?:\/\//i.test(url) &&
-      (/\.(mp4|m3u8)(\?|$)/i.test(url) || /\/video\//i.test(url))
+      (
+        /\.(mp4|m3u8)(\?|$)/i.test(url) ||
+        /[?&]type=\.(?:mp4|m3u8)(?:&|$)/i.test(url) ||
+        /\/video\//i.test(url)
+      )
     );
 
   return uniq(sources);
@@ -469,24 +473,31 @@ async function getStream(prefix, url, epNum = 1) {
 
     if (!uniqueSources.length) return null;
 
-    return uniqueSources.map((src, index) => ({
-      ...buildStream(
-        src.url,
-        epNum,
-        detail?.title || "Cat3Movie",
-        uniqueSources.length > 1 ? `Server ${index + 1}` : "Cat3Movie",
-        "cat3",
-        /1a-1791\.com/i.test(src.url) ? "https://vivamax.cam/" : null
-      ),
-      subtitles: src.subtitle
-        ? [
-            {
-              url: src.subtitle,
-              lang: src.language || "English"
-            }
-          ]
-        : undefined
-    }));
+    return uniqueSources.map((src, index) => {
+        const referer =
+            /1a-1791\.com/i.test(src.url) ? "https://vivamax.cam/" :
+            /nizu\.top/i.test(src.url) ? "https://www.cat3movie.club/" :
+            null;
+
+        return {
+            ...buildStream(
+                src.url,
+                epNum,
+                detail?.title || "Cat3Movie",
+                uniqueSources.length > 1 ? `Server ${index + 1}` : "Cat3Movie",
+                "cat3",
+                referer
+            ),
+            subtitles: src.subtitle
+                ? [
+                    {
+                        url: src.subtitle,
+                        lang: src.language || "English"
+                    }
+                ]
+                : undefined
+        };
+    });
   } catch (e) {
     console.log("[cat3] stream error:", e.message);
     return null;
