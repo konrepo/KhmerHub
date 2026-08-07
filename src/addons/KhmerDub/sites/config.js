@@ -47,7 +47,7 @@ module.exports = {
   },	
   
   thekomsan: {
-    ...albumSite,
+    ...defaultSite,
     pageSize: 20,
     baseUrl: "https://www.thekomsan.com",
     genreUrls: {
