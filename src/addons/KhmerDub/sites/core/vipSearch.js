@@ -83,7 +83,7 @@ async function findVipBloggerDetailBySearch(seriesUrl, postId) {
           .pop() || "";
 
         const score = scoreCandidate(title, entrySlug, targetTitle, targetSlug);
-        if (score < 30) continue;
+        if (score < 80) continue;
 
         const urls = parseVipBloggerContent(content);
         if (!urls.length) continue;

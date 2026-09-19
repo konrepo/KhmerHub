@@ -9,6 +9,11 @@ function parseVipBloggerContent(content = "") {
 
   urls.push(...extractVideoLinks(content));
 
+  const khmerMovieRegex =
+    /https?:\/\/(?:www\.)?khmer-movie\.org\/tv-shows\/[^)"'<>\s]+/gi;
+
+  urls.push(...(content.match(khmerMovieRegex) || []));
+
   let match;
 
   const dmRegex = /\{dm=(\w+)\}/gi;
