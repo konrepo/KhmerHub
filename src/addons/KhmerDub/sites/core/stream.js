@@ -566,34 +566,6 @@ async function getStream(prefix, seriesUrl, episode) {
   let url = detail.urls[episode - 1];
   if (!url) return null;
 
-  if (detail.sourceType === "luly") {
-  const playerUrl = await resolveLulyEpisode(url);
-  if (!playerUrl) return null;
-
-  const mediaUrl = await resolveAuthorizedNizuMedia(playerUrl);
-
-  if (mediaUrl) {
-    return buildStream(
-      mediaUrl,
-      episode,
-      undefined,
-      providerName,
-      groupName,
-      new URL(playerUrl).origin + "/"
-    );
-  }
-
-  return {
-    externalUrl: playerUrl,
-    name: providerName,
-    title: `Episode ${episode}`,
-    behaviorHints: {
-      group: groupName,
-      notWebReady: true
-    }
-  };
-}
-
   if (/https?:\/\/(?:www\.)?khmer-movie\.org\//i.test(url)) {
     const resolved = await resolveKhmerMovieEpisode(url, episode);
     if (!resolved) return null;
