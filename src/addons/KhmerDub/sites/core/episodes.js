@@ -37,7 +37,10 @@ async function getEpisodes(prefix, seriesUrl) {
     return [];
   }
 
-  const maxEp = POST_INFO.get(postId)?.maxEp || null;
+  const cached = POST_INFO.get(postId);
+  // Reuse the original series poster when the selected video host has no thumbnail.
+  const episodeThumbnail = cached?.poster || detail.thumbnail || "";
+  const maxEp = cached?.maxEp || null;
 
   let urls = Array.isArray(detail.urls)
     ? detail.urls.filter(Boolean)
@@ -53,7 +56,7 @@ async function getEpisodes(prefix, seriesUrl) {
     seriesTitle: detail.title,
     season: 1,
     episode: index + 1,
-    thumbnail: detail.thumbnail,
+    thumbnail: episodeThumbnail,
     released: new Date().toISOString(),
   }));
 }

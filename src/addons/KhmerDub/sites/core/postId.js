@@ -141,6 +141,15 @@ async function getPostId(url) {
       .trim() ||
     "";
 
+  // Preserve the original series artwork for detail and episode cards.
+  // Prefer PhumiVIP's social preview image over third-party player artwork.
+  const poster =
+    $("meta[property='og:image']").attr("content") ||
+    $("meta[name='twitter:image']").attr("content") ||
+    $("img[post-id]").first().attr("data-src") ||
+    $("img[post-id]").first().attr("src") ||
+    "";
+
   URL_TO_POSTID.set(url, postId);
 
   POST_INFO.set(postId, {
@@ -149,7 +158,8 @@ async function getPostId(url) {
     sourceType: sourceType || "unknown",
     pageHtml: data,
     slug,
-    cleanTitle
+    cleanTitle,
+    poster: poster || POST_INFO.get(postId)?.poster || ""
   });
 
   return postId;
