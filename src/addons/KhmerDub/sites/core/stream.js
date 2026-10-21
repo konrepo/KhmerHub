@@ -125,7 +125,7 @@ function extractKhmerMoviePlayerConfig(html = "") {
   );
 
   let nonce = "";
-  let ajaxUrl = "https://khmer-movie.org/wp-admin/admin-ajax.php";
+  let ajaxUrl = "";
 
   if (playerSettingsMatch?.[1]) {
     const playerSettingsText = playerSettingsMatch[1];
@@ -142,7 +142,7 @@ function extractKhmerMoviePlayerConfig(html = "") {
       ajaxUrl;
   }
 
-  if (!postId || !accessToken || !nonce) {
+  if (!postId || !accessToken || !nonce || !ajaxUrl) {
     return null;
   }
 
@@ -221,8 +221,11 @@ async function fetchKhmerMovieDetail(seriesUrl) {
 
     if (!slug) return null;
 
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (!["khmer-movie.org", "sndrama.org"].includes(hostname)) return null;
+
     const baseUrl =
-      `https://khmer-movie.org/tv-shows/${encodeURIComponent(slug)}/`;
+      `${parsedUrl.origin}/tv-shows/${encodeURIComponent(slug)}/`;
 
     const firstEpisodeUrl = `${baseUrl}?ep=1`;
 
@@ -236,7 +239,11 @@ async function fetchKhmerMovieDetail(seriesUrl) {
     const config = extractKhmerMoviePlayerConfig(html);
     if (!config) return null;
 
-    const episodeCount = config.freeEps;
+    // SNDrama can report freeEps=0 for an unlocked, non-premium title.
+    // Expose only episode 1 as a fallback until an authoritative episode list is available.
+    const episodeCount = config.freeEps > 0
+      ? config.freeEps
+      : (hostname === "sndrama.org" && (!config.isPremium || config.isUnlocked) ? 1 : 0);
 
     if (!episodeCount) return null;
 
@@ -439,6 +446,16 @@ async function getStreamDetail(postId, seriesUrl = "") {
         pageHtml = data || "";
       }
 
+      // Some VIP pages link directly to an SNDrama episode page.
+      // Keep stable page URLs in cache; resolve the ANC media link at playback time.
+      const sndramaMatch = String(pageHtml).replace(/\\\//g, "/")
+        .match(/https?:\/\/(?:www\.)?sndrama\.org\/tv-shows\/[^"'<>\s]+/i);
+      if (sndramaMatch && !detail) {
+        const snUrl = sndramaMatch[0].replace(/&amp;/g, "&");
+        const snDetail = await fetchKhmerMovieDetail(snUrl);
+        if (snDetail) detail = snDetail;
+      }
+
       const khmerDramaUrl = extractKhmerDramaUrl(pageHtml);
 
       if (khmerDramaUrl) {
@@ -516,6 +533,15 @@ async function getStream(prefix, seriesUrl, episode) {
   const providerName = providerNames[prefix] || "KhmerDub";
   const groupName = prefix || "khmerdub";
 
+  // Direct SNDrama episode links need no Blogger/WordPress post ID.
+  if (/^https?:\/\/(?:www\.)?sndrama\.org\/tv-shows\//i.test(seriesUrl)) {
+    const pageUrl = new URL(seriesUrl);
+    pageUrl.searchParams.set("ep", String(episode));
+    const resolved = await resolveKhmerMovieEpisode(pageUrl.toString(), episode);
+    if (!resolved) return null;
+    return buildStream(resolved, episode, undefined, providerName, groupName, pageUrl.toString());
+  }
+
   if (prefix === "sunday" && !postId) {
     const { data } = await axiosClient.get(seriesUrl, {
       headers: {
@@ -567,7 +593,7 @@ async function getStream(prefix, seriesUrl, episode) {
   let url = detail.urls[episode - 1];
   if (!url) return null;
 
-  if (/https?:\/\/(?:www\.)?khmer-movie\.org\//i.test(url)) {
+  if (/https?:\/\/(?:www\.)?(?:khmer-movie\.org|sndrama\.org)\//i.test(url)) {
     const resolved = await resolveKhmerMovieEpisode(url, episode);
     if (!resolved) return null;
     url = resolved;
