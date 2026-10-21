@@ -400,7 +400,7 @@ async function discoverExtraVIPDetail(seriesUrl, cachedHtml) {
 ========================= */
 async function getStreamDetail(postId, seriesUrl = "") {
   const cached = POST_INFO.get(postId);
-  if (cached?.detail) return cached.detail;
+  if (cached?.detail?.urls?.length) return cached.detail;
 
   const sourceType = cached?.sourceType || "blogger";
   let detail = null;
@@ -455,7 +455,9 @@ async function getStreamDetail(postId, seriesUrl = "") {
     } catch {}
   }
 
-  if (!detail && seriesUrl && sourceType !== "vip-wordpress") {
+  // Additional hosts are fallbacks only; do not replace a working legacy source.
+  // VIP WordPress pages can link to SNDrama or Luly, so do not exclude them.
+  if (!detail && seriesUrl) {
     detail = await discoverExtraVIPDetail(seriesUrl, cached?.pageHtml || "");
   }
 
