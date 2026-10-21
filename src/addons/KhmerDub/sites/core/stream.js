@@ -239,11 +239,18 @@ async function fetchKhmerMovieDetail(seriesUrl) {
     const config = extractKhmerMoviePlayerConfig(html);
     if (!config) return null;
 
-    // SNDrama can report freeEps=0 for an unlocked, non-premium title.
-    // Expose only episode 1 as a fallback until an authoritative episode list is available.
-    const episodeCount = config.freeEps > 0
-      ? config.freeEps
-      : (hostname === "sndrama.org" && (!config.isPremium || config.isUnlocked) ? 1 : 0);
+    // Use the series episode count when SNDrama reports freeEps=0.
+    const episodeMatch = String(html).match(
+      /<span class=["']meta-label["']>\s*Episode:\s*<\/span>\s*<span class=["']meta-value["']>\s*(\d+)\s*<\/span>/i
+    );
+
+    const totalEpisodes = episodeMatch
+      ? parseInt(episodeMatch[1], 10)
+      : 0;
+
+    const episodeCount = hostname === "sndrama.org"
+      ? (totalEpisodes || config.freeEps || 1)
+      : config.freeEps;
 
     if (!episodeCount) return null;
 
