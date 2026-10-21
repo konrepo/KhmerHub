@@ -4,6 +4,7 @@ const { extractVideoLinks } = require("../../utils/helpers");
 const {
   resolvePlayerUrl,
   resolveOkEmbed,
+  resolveNizuEmbed,
   buildStream
 } = require("../../utils/streamResolvers");
 const { getPostId } = require("./postId");
@@ -572,6 +573,22 @@ async function getStream(prefix, seriesUrl, episode) {
     url = resolved;
   }
 
+  // Luly stores stable episode pages; resolve their short-lived media URL on every play.
+  if (/^https?:\/\/(?:www\.)?luly\.top\//i.test(url)) {
+    const embed = await resolveLulyEpisode(url);
+    if (!embed) return null;
+    url = embed;
+  }
+
+  let playbackReferer = seriesUrl || "https://phumikhmer.vip/";
+  if (/^https?:\/\/s\d+\.nizu\.top\//i.test(url)) {
+    const embedUrl = url;
+    const resolved = await resolveNizuEmbed(embedUrl);
+    if (!resolved) return null;
+    url = resolved;
+    playbackReferer = embedUrl;
+  }
+
   if (url.includes("player.php")) {
     const resolved = await resolvePlayerUrl(url);
     if (!resolved) return null;
@@ -590,7 +607,7 @@ async function getStream(prefix, seriesUrl, episode) {
     undefined,
     providerName,
     groupName,
-    seriesUrl || "https://phumikhmer.vip/"
+    playbackReferer
   );
 }
 
