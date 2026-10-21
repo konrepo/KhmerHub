@@ -238,6 +238,45 @@ async function resolveScreenPal(url) {
 }
 
 /* =========================
+   NIZU JW PLAYER RESOLVE
+========================= */
+async function resolveNizuEmbed(embedUrl) {
+  try {
+    const parsed = new URL(embedUrl);
+    if (!/^s\d+\.nizu\.top$/i.test(parsed.hostname)) return null;
+
+    const { data } = await axiosClient.get(parsed.toString(), {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Referer: "https://luly.top/"
+      }
+    });
+
+    const html = String(data || "");
+    const match = html.match(/\b(?:var|let|const)\s+videoSources\s*=\s*(\[[\s\S]*?\])\s*;/);
+    if (!match) return null;
+
+    const sources = JSON.parse(match[1].replace(/\\:/g, ":"));
+    const playable = sources
+      .filter((source) => source && typeof source.file === "string")
+      .sort((a, b) => (parseInt(b.label, 10) || 0) - (parseInt(a.label, 10) || 0));
+
+    for (const source of playable) {
+      const url = new URL(source.file.replace(/\\\//g, "/"), parsed);
+      if (!/^https?:$/.test(url.protocol)) continue;
+      // Never send a player page to the media demuxer.
+      if (url.searchParams.has("stream") || /\.(?:mp4|m3u8)(?:$|\?)/i.test(url.toString())) {
+        return url.toString();
+      }
+    }
+    return null;
+  } catch (error) {
+    console.warn("[VIP Nizu resolve failed]", error.message);
+    return null;
+  }
+}
+
+/* =========================
    BUILD STREAM
 ========================= */
 function buildStream(
@@ -285,6 +324,7 @@ function buildStream(
 module.exports = {
   resolvePlayerUrl,
   resolveOkEmbed,
+  resolveNizuEmbed,
   resolveScreenPal,
   buildStream,
   extractYouTubeId,
