@@ -270,8 +270,99 @@ async function fetchKhmerMovieDetail(seriesUrl) {
 }
 
 /* =========================
+   LULY DETAIL
+========================= */
+async function fetchLulyDetail(seriesUrl, pageHtml = "") {
+  try {
+    const cheerio = require("cheerio");
+
+    const $ = cheerio.load(pageHtml);
+
+    const lulyLink = $(".single-post-content a[href*='luly.top/']")
+      .map((_, el) => $(el).attr("href"))
+      .get()
+      .find((url) => {
+        try {
+          const parsed = new URL(url);
+
+          return (
+            parsed.hostname === "luly.top" &&
+            /^\/[^/]+-\d+\/?$/.test(parsed.pathname)
+          );
+        } catch {
+          return false;
+        }
+      });
+
+    if (!lulyLink) return null;
+
+    const { data: lulyHtml } = await axiosClient.get(lulyLink, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Referer: seriesUrl
+      }
+    });
+
+    const $$ = cheerio.load(lulyHtml);
+
+    const episodeMap = new Map();
+
+    $$(".episodelist a[href]").each((_, el) => {
+      const href = $$(el).attr("href") || "";
+      const label = $$(el).text().trim();
+
+      const match = label.match(
+        /(?:Eps?|Episode)\s*0*(\d+)/i
+      );
+
+      if (!match) return;
+
+      const epNumber = Number(match[1]);
+
+      if (!Number.isInteger(epNumber) || epNumber <= 0) {
+        return;
+      }
+
+      try {
+        const epUrl = new URL(href, lulyLink);
+
+        if (epUrl.hostname !== "luly.top") return;
+
+        episodeMap.set(epNumber, epUrl.toString());
+      } catch {}
+    });
+
+    if (!episodeMap.size) return null;
+
+    const urls = [...episodeMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, url]) => url);
+
+    const title =
+      $$("h2[itemprop='partOfSeries']").first().text().trim() ||
+      $$("meta[property='og:title']").attr("content") ||
+      "PhumiVIP";
+
+    const thumbnail =
+      $$("meta[property='og:image']").attr("content") ||
+      "";
+
+    return {
+      title,
+      thumbnail,
+      urls,
+      maxEp: urls.length,
+      sourceType: "luly"
+    };
+  } catch {
+    return null;
+  }
+}
+
+/* =========================
    STREAM DETAIL
 ========================= */
+
 async function getStreamDetail(postId, seriesUrl = "") {
   const cached = POST_INFO.get(postId);
   if (cached?.detail) return cached.detail;
@@ -334,7 +425,24 @@ async function getStreamDetail(postId, seriesUrl = "") {
       const hostname = new URL(seriesUrl).hostname.replace(/^www\./, "");
 
       if (hostname === "phumikhmer.vip") {
-        detail = await fetchKhmerMovieDetail(seriesUrl);
+        let pageHtml = cached?.pageHtml || "";
+
+        if (!pageHtml) {
+          const { data } = await axiosClient.get(seriesUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0",
+              Referer: seriesUrl
+            }
+          });
+
+          pageHtml = data || "";
+        }
+
+        detail = await fetchLulyDetail(seriesUrl, pageHtml);
+
+        if (!detail) {
+          detail = await fetchKhmerMovieDetail(seriesUrl);
+        }
       }
     } catch {}
   }
