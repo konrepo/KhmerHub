@@ -532,6 +532,15 @@ async function getStream(prefix, seriesUrl, episode) {
   let url = detail.urls[episode - 1];
   if (!url) return null;
 
+  if (detail.sourceType === "luly") {
+    console.warn("[Luly] External playback resolver unavailable:", {
+      episode,
+      pageUrl: url
+    });
+
+    return null;
+  }
+
   if (/https?:\/\/(?:www\.)?khmer-movie\.org\//i.test(url)) {
     const resolved = await resolveKhmerMovieEpisode(url, episode);
     if (!resolved) return null;
