@@ -270,6 +270,40 @@ async function fetchKhmerMovieDetail(seriesUrl) {
 }
 
 /* =========================
+   LULY PLAYER RESOLVE
+========================= */
+async function resolveLulyEpisode(episodeUrl) {
+  try {
+    const cheerio = require("cheerio");
+
+    const { data: html } = await axiosClient.get(episodeUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Referer: episodeUrl
+      }
+    });
+
+    const $ = cheerio.load(html);
+
+    const iframeUrl = $(".player-embed iframe[src]")
+      .first()
+      .attr("src");
+
+    if (!iframeUrl) return null;
+
+    const parsed = new URL(iframeUrl, episodeUrl);
+
+    if (!/^s\d+\.nizu\.top$/i.test(parsed.hostname)) {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/* =========================
    LULY DETAIL
 ========================= */
 async function fetchLulyDetail(seriesUrl, pageHtml = "") {
@@ -533,12 +567,19 @@ async function getStream(prefix, seriesUrl, episode) {
   if (!url) return null;
 
   if (detail.sourceType === "luly") {
-    console.warn("[Luly] External playback resolver unavailable:", {
-      episode,
-      pageUrl: url
-    });
+    const playerUrl = await resolveLulyEpisode(url);
 
-    return null;
+    if (!playerUrl) return null;
+
+    return {
+      externalUrl: playerUrl,
+      name: providerName,
+      title: `Episode ${episode}`,
+      behaviorHints: {
+        group: groupName,
+        notWebReady: true
+      }
+    };
   }
 
   if (/https?:\/\/(?:www\.)?khmer-movie\.org\//i.test(url)) {
