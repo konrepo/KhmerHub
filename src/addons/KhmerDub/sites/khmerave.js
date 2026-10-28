@@ -25,34 +25,6 @@ function posterFromStyle(style) {
   return m ? m[1].replace(/['"]/g, "") : "";
 }
 
-// TEMPORARY: Test whether Render can access the KhmerAvenue API.
-async function testKhmerAveApi() {
-  try {
-    const { data } = await axios.get(
-      "https://www.khmeravenue.com/wp-json/wp/v2/album?per_page=3",
-      {
-        headers: {
-          "User-Agent": UA_WIN,
-          Referer: "https://www.khmeravenue.com/"
-        },
-        timeout: 15000
-      }
-    );
-
-    console.log("[KhmerAve API test]", {
-      count: Array.isArray(data) ? data.length : "not an array",
-      firstTitle: data?.[0]?.title?.rendered,
-      firstImageId: data?.[0]?.acf?.video_image
-    });
-  } catch (err) {
-    console.error("[KhmerAve API test]", {
-      status: err.response?.status,
-      message: err.message
-    });
-  }
-}
-
-
 /* =========================
    EPISODE NUMBER HELPER
 ========================= */
@@ -93,7 +65,147 @@ function extractEpisodeNumber(link, text = "") {
 /* =========================
    CATALOG
 ========================= */
+const KHMERAVE_API = "https://www.khmeravenue.com/wp-json/wp/v2";
+
+function parseKhmerAveCatalogRequest(url, pageSize) {
+  const parsed = new URL(url);
+  const parts = parsed.pathname.split("/").filter(Boolean);
+  let page = 1;
+
+  const pageIndex = parts.findIndex(
+    (part, index) => part === "page" && /^\d+$/.test(parts[index + 1] || "")
+  );
+  if (pageIndex >= 0) page = Math.max(1, Number(parts[pageIndex + 1]) || 1);
+
+  const taxonomySlugs = new Set([
+    "feature",
+    "country",
+    "genre",
+    "videostags",
+    "dubbed",
+    "albumcategory"
+  ]);
+
+  let taxonomy = "";
+  let termSlug = "";
+  if (parts.length >= 2 && taxonomySlugs.has(parts[0])) {
+    taxonomy = parts[0];
+    termSlug = parts[1];
+  }
+
+  return {
+    page,
+    perPage: Math.min(100, Math.max(1, Number(pageSize) || 18)),
+    taxonomy,
+    termSlug,
+    search: (parsed.searchParams.get("s") || parsed.searchParams.get("search") || "").trim()
+  };
+}
+
+async function getKhmerAveApiCatalogItems(url, siteConfig) {
+  const request = parseKhmerAveCatalogRequest(url, siteConfig?.pageSize || 18);
+  const params = {
+    per_page: request.perPage,
+    page: request.page
+  };
+
+  if (request.search) params.search = request.search;
+
+  if (request.taxonomy && request.termSlug) {
+    const termUrl = `${KHMERAVE_API}/${request.taxonomy}`;
+    const { data: terms } = await axios.get(termUrl, {
+      params: { slug: request.termSlug },
+      headers: { "User-Agent": UA_WIN, Referer: "https://www.khmeravenue.com/" },
+      timeout: 15000
+    });
+
+    const term = Array.isArray(terms) ? terms[0] : null;
+    if (!term?.id) {
+      console.warn("[KhmerAve API] taxonomy term not found", {
+        taxonomy: request.taxonomy,
+        slug: request.termSlug
+      });
+      return [];
+    }
+    params[request.taxonomy] = term.id;
+  }
+
+  const { data: albums } = await axios.get(`${KHMERAVE_API}/album`, {
+    params,
+    headers: { "User-Agent": UA_WIN, Referer: "https://www.khmeravenue.com/" },
+    timeout: 15000
+  });
+
+  if (!Array.isArray(albums) || albums.length === 0) return [];
+
+  // KhmerAvenue stores its poster attachment ID in acf.video_image, not featured_media.
+  const imageIds = [...new Set(
+    albums
+      .map((album) => Number(album?.acf?.video_image))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  )];
+
+  const imagesById = new Map();
+  if (imageIds.length) {
+    try {
+      const { data: media } = await axios.get(`${KHMERAVE_API}/media`, {
+        params: { include: imageIds.join(","), per_page: Math.min(100, imageIds.length) },
+        headers: { "User-Agent": UA_WIN, Referer: "https://www.khmeravenue.com/" },
+        timeout: 15000
+      });
+
+      if (Array.isArray(media)) {
+        for (const image of media) {
+          const sizes = image?.media_details?.sizes || {};
+          const poster =
+            sizes.medium_large?.source_url ||
+            sizes.medium?.source_url ||
+            sizes.thumbnail?.source_url ||
+            image?.source_url ||
+            "";
+          if (image?.id && poster) imagesById.set(Number(image.id), poster);
+        }
+      }
+    } catch (err) {
+      // Keep catalog titles/links available if image metadata temporarily fails.
+      console.error("[KhmerAve API] media lookup failed:", err.response?.status || err.message);
+    }
+  }
+
+  return albums
+    .map((album) => {
+      const title = cleanTitle(album?.title?.rendered || "");
+      const link = album?.link || "";
+      const imageId = Number(album?.acf?.video_image);
+      const poster = imagesById.get(imageId) || "";
+
+      if (!title || !link) return null;
+      return {
+        id: `khmerave:${encodeURIComponent(link)}`,
+        name: title,
+        poster,
+        background: poster
+      };
+    })
+    .filter(Boolean);
+}
+
 async function getCatalogItems(prefix, siteConfig, url) {
+  // KhmerAvenue blocks Render's HTML requests with Cloudflare 403, but its public
+  // WordPress REST API is accessible. Keep Merlkon on its existing HTML parser.
+  if (prefix === "khmerave") {
+    try {
+      return await getKhmerAveApiCatalogItems(url, siteConfig);
+    } catch (err) {
+      console.error("[KhmerAve API catalog error]", {
+        status: err.response?.status,
+        url: err.config?.url,
+        message: err.message
+      });
+      return [];
+    }
+  }
+
   try {
     const { data } = await axios.get(url, {
       headers: { "User-Agent": UA_WIN, Referer: referer(prefix) },
@@ -125,16 +237,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
 
     return items;
   } catch (err) {
-    console.error("[KhmerAve catalog]", {
-      status: err.response?.status,
-      url: err.config?.url,
-      server: err.response?.headers?.server,
-      contentType: err.response?.headers?.["content-type"],
-      body: typeof err.response?.data === "string"
-        ? err.response.data.slice(0, 500)
-        : ""
-    });
-
+    console.error("khmerave catalog error:", err.message);
     return [];
   }
 }
@@ -490,9 +593,6 @@ async function getStream(prefix, seriesUrl, episode) {
     return null;
   }
 }
-
-// Temporary API connectivity test
-testKhmerAveApi();
 
 module.exports = {
   getCatalogItems,
