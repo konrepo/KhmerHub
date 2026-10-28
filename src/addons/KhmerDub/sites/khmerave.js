@@ -109,6 +109,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
 
     return [];
   }
+}
 
 /* =========================
    EPISODES
