@@ -52,6 +52,36 @@ async function testKhmerAveFeed() {
   }
 }
 
+async function testKhmerAveMediaApi() {
+  for (const url of [
+    "https://www.khmeravenue.com/wp-json/wp/v2/album/269426",
+    "https://www.khmeravenue.com/wp-json/wp/v2/media/269427"
+  ]) {
+    try {
+      const { data } = await axios.get(url, {
+        headers: {
+          "User-Agent": UA_WIN,
+          Referer: "https://www.khmeravenue.com/"
+        },
+        timeout: 15000
+      });
+
+      console.log("[KhmerAve media API test]", {
+        url,
+        status: 200,
+        title: data.title?.rendered,
+        image: data.source_url || data.acf?.video_image
+      });
+    } catch (err) {
+      console.error("[KhmerAve media API test]", {
+        url,
+        status: err.response?.status,
+        message: err.message
+      });
+    }
+  }
+}
+
 /* =========================
    EPISODE NUMBER HELPER
 ========================= */
@@ -622,6 +652,7 @@ async function getStream(prefix, seriesUrl, episode) {
 }
 
 testKhmerAveFeed();
+testKhmerAveMediaApi();
 
 module.exports = {
   getCatalogItems,
