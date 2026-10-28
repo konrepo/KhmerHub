@@ -25,64 +25,6 @@ function posterFromStyle(style) {
   return m ? m[1].replace(/['"]/g, "") : "";
 }
 
-async function testKhmerAveFeed() {
-  try {
-    const { data } = await axios.get(
-      "https://www.khmeravenue.com/album/feed/",
-      {
-        headers: {
-          "User-Agent": UA_WIN,
-          Accept: "application/rss+xml, application/xml, text/xml, */*",
-          Referer: "https://www.khmeravenue.com/"
-        },
-        timeout: 15000
-      }
-    );
-
-    console.log("[KhmerAve RSS test]", {
-      isXml: typeof data === "string" && data.includes("<rss"),
-      hasMakeAWish:
-        typeof data === "string" && data.includes("Make a Wish")
-    });
-  } catch (err) {
-    console.error("[KhmerAve RSS test]", {
-      status: err.response?.status,
-      message: err.message
-    });
-  }
-}
-
-async function testKhmerAveMediaApi() {
-  const tests = [
-    ["album", "https://www.khmeravenue.com/wp-json/wp/v2/album/269426"],
-    ["media", "https://www.khmeravenue.com/wp-json/wp/v2/media/269427"]
-  ];
-
-  for (const [label, url] of tests) {
-    try {
-      const { data } = await axios.get(url, {
-        headers: {
-          "User-Agent": UA_WIN,
-          Referer: "https://www.khmeravenue.com/"
-        },
-        timeout: 15000
-      });
-
-      console.log(
-        `[KhmerAve ${label} test] OK`,
-        label === "album"
-          ? String(data?.title?.rendered || "no title")
-          : String(data?.source_url || "no image URL")
-      );
-    } catch (err) {
-      console.log(
-        `[KhmerAve ${label} test] FAILED`,
-        String(err.response?.status || err.code || err.message)
-      );
-    }
-  }
-}
-
 /* =========================
    EPISODE NUMBER HELPER
 ========================= */
@@ -124,8 +66,9 @@ function extractEpisodeNumber(link, text = "") {
    CATALOG
 ========================= */
 const KHMERAVE_API = "https://www.khmeravenue.com/wp-json/wp/v2";
+const KHMERAVE_ORIGIN = "https://www.khmeravenue.com";
 
-function parseKhmerAveCatalogRequest(url, pageSize) {
+function parseKhmerAveCatalogRequest(url) {
   const parsed = new URL(url);
   const parts = parsed.pathname.split("/").filter(Boolean);
   let page = 1;
@@ -135,129 +78,148 @@ function parseKhmerAveCatalogRequest(url, pageSize) {
   );
   if (pageIndex >= 0) page = Math.max(1, Number(parts[pageIndex + 1]) || 1);
 
-  const taxonomySlugs = new Set([
-    "feature",
-    "country",
-    "genre",
-    "videostags",
-    "dubbed",
-    "albumcategory"
-  ]);
+  const search = (parsed.searchParams.get("s") || parsed.searchParams.get("search") || "").trim();
+  let feedUrl;
 
-  let taxonomy = "";
-  let termSlug = "";
-  if (parts.length >= 2 && taxonomySlugs.has(parts[0])) {
-    taxonomy = parts[0];
-    termSlug = parts[1];
+  if (search) {
+    const params = new URLSearchParams({
+      feed: "rss2",
+      post_type: "album",
+      s: search
+    });
+    feedUrl = `${KHMERAVE_ORIGIN}/?${params.toString()}`;
+  } else if (parts[0] === "album") {
+    feedUrl = `${KHMERAVE_ORIGIN}/album/feed/${page > 1 ? `?paged=${page}` : ""}`;
+  } else {
+    // WordPress taxonomy archive RSS; keeps genre requests within the requested taxonomy.
+    const archivePath = `/${parts.join("/")}${parts.length ? "/" : ""}`;
+    feedUrl = `${KHMERAVE_ORIGIN}${archivePath}feed/${page > 1 ? `?paged=${page}` : ""}`;
   }
 
-  return {
-    page,
-    perPage: Math.min(100, Math.max(1, Number(pageSize) || 18)),
-    taxonomy,
-    termSlug,
-    search: (parsed.searchParams.get("s") || parsed.searchParams.get("search") || "").trim()
-  };
+  return { page, feedUrl };
 }
 
-async function getKhmerAveApiCatalogItems(url, siteConfig) {
-  const request = parseKhmerAveCatalogRequest(url, siteConfig?.pageSize || 18);
-  const params = {
-    per_page: request.perPage,
-    page: request.page
-  };
+function postIdFromRssItem($item, link) {
+  const guid = $item.find("guid").first().text().trim();
+  const text = `${guid} ${link || ""}`;
+  const match =
+    text.match(/[?&]p=(\d+)/i) ||
+    text.match(/\/album\/(\d+)(?:\/|$)/i);
+  return match ? Number(match[1]) : 0;
+}
 
-  if (request.search) params.search = request.search;
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
-  if (request.taxonomy && request.termSlug) {
-    const termUrl = `${KHMERAVE_API}/${request.taxonomy}`;
-    const { data: terms } = await axios.get(termUrl, {
-      params: { slug: request.termSlug },
-      headers: { "User-Agent": UA_WIN, Referer: "https://www.khmeravenue.com/" },
+async function getAlbumImageId(postId) {
+  if (!postId) return 0;
+  try {
+    const { data } = await axios.get(`${KHMERAVE_API}/album/${postId}`, {
+      headers: {
+        "User-Agent": UA_WIN,
+        Referer: `${KHMERAVE_ORIGIN}/`
+      },
       timeout: 15000
     });
-
-    const term = Array.isArray(terms) ? terms[0] : null;
-    if (!term?.id) {
-      console.warn("[KhmerAve API] taxonomy term not found", {
-        taxonomy: request.taxonomy,
-        slug: request.termSlug
-      });
-      return [];
-    }
-    params[request.taxonomy] = term.id;
+    const imageId = Number(data?.acf?.video_image);
+    return Number.isInteger(imageId) && imageId > 0 ? imageId : 0;
+  } catch (err) {
+    console.warn("[KhmerAve RSS] album metadata unavailable", {
+      postId,
+      status: err.response?.status || null,
+      message: err.message
+    });
+    return 0;
   }
+}
 
-  const { data: albums } = await axios.get(`${KHMERAVE_API}/album`, {
-    params,
-    headers: { "User-Agent": UA_WIN, Referer: "https://www.khmeravenue.com/" },
-    timeout: 15000
+async function getMediaPoster(imageId) {
+  if (!imageId) return "";
+  try {
+    const { data } = await axios.get(`${KHMERAVE_API}/media/${imageId}`, {
+      headers: {
+        "User-Agent": UA_WIN,
+        Referer: `${KHMERAVE_ORIGIN}/`
+      },
+      timeout: 15000
+    });
+    const sizes = data?.media_details?.sizes || {};
+    return sizes.medium_large?.source_url ||
+      sizes.medium?.source_url ||
+      sizes.thumbnail?.source_url ||
+      data?.source_url ||
+      "";
+  } catch (err) {
+    console.warn("[KhmerAve RSS] poster unavailable", {
+      imageId,
+      status: err.response?.status || null,
+      message: err.message
+    });
+    return "";
+  }
+}
+
+async function getKhmerAveRssCatalogItems(url) {
+  const { feedUrl } = parseKhmerAveCatalogRequest(url);
+  const { data } = await axios.get(feedUrl, {
+    headers: {
+      "User-Agent": UA_WIN,
+      Accept: "application/rss+xml, application/xml, text/xml, */*",
+      Referer: `${KHMERAVE_ORIGIN}/`
+    },
+    timeout: 20000
   });
 
-  if (!Array.isArray(albums) || albums.length === 0) return [];
+  const $ = cheerio.load(String(data || ""), { xmlMode: true });
+  const entries = $("channel > item").toArray().map((el) => {
+    const item = $(el);
+    const title = cleanTitle(item.find("title").first().text());
+    const link = item.find("link").first().text().trim();
+    const postId = postIdFromRssItem(item, link);
+    return { title, link, postId };
+  }).filter((item) => item.title && item.link);
 
-  // KhmerAvenue stores its poster attachment ID in acf.video_image, not featured_media.
-  const imageIds = [...new Set(
-    albums
-      .map((album) => Number(album?.acf?.video_image))
-      .filter((id) => Number.isInteger(id) && id > 0)
-  )];
+  // Resolve image IDs with a small concurrency limit to avoid bursts of requests.
+  const withImageIds = await mapWithConcurrency(entries, 3, async (entry) => ({
+    ...entry,
+    imageId: await getAlbumImageId(entry.postId)
+  }));
+  const withPosters = await mapWithConcurrency(withImageIds, 3, async (entry) => ({
+    ...entry,
+    poster: await getMediaPoster(entry.imageId)
+  }));
 
-  const imagesById = new Map();
-  if (imageIds.length) {
-    try {
-      const { data: media } = await axios.get(`${KHMERAVE_API}/media`, {
-        params: { include: imageIds.join(","), per_page: Math.min(100, imageIds.length) },
-        headers: { "User-Agent": UA_WIN, Referer: "https://www.khmeravenue.com/" },
-        timeout: 15000
-      });
-
-      if (Array.isArray(media)) {
-        for (const image of media) {
-          const sizes = image?.media_details?.sizes || {};
-          const poster =
-            sizes.medium_large?.source_url ||
-            sizes.medium?.source_url ||
-            sizes.thumbnail?.source_url ||
-            image?.source_url ||
-            "";
-          if (image?.id && poster) imagesById.set(Number(image.id), poster);
-        }
-      }
-    } catch (err) {
-      // Keep catalog titles/links available if image metadata temporarily fails.
-      console.error("[KhmerAve API] media lookup failed:", err.response?.status || err.message);
-    }
-  }
-
-  return albums
-    .map((album) => {
-      const title = cleanTitle(album?.title?.rendered || "");
-      const link = album?.link || "";
-      const imageId = Number(album?.acf?.video_image);
-      const poster = imagesById.get(imageId) || "";
-
-      if (!title || !link) return null;
-      return {
-        id: `khmerave:${encodeURIComponent(link)}`,
-        name: title,
-        poster,
-        background: poster
-      };
-    })
-    .filter(Boolean);
+  return withPosters.map((item) => ({
+    id: `khmerave:${encodeURIComponent(item.link)}`,
+    name: item.title,
+    poster: item.poster,
+    background: item.poster
+  }));
 }
 
 async function getCatalogItems(prefix, siteConfig, url) {
-  // KhmerAvenue blocks Render's HTML requests with Cloudflare 403, but its public
-  // WordPress REST API is accessible. Keep Merlkon on its existing HTML parser.
+  // KhmerAvenue's public RSS and individual WordPress API records are accessible from Render,
+  // while its HTML archive and API collection can return Cloudflare 403 responses.
   if (prefix === "khmerave") {
     try {
-      return await getKhmerAveApiCatalogItems(url, siteConfig);
+      const items = await getKhmerAveRssCatalogItems(url);
+      console.log("[KhmerAve RSS catalog]", { count: items.length, url });
+      return items;
     } catch (err) {
-      console.error("[KhmerAve API catalog error]", {
-        status: err.response?.status,
-        url: err.config?.url,
+      console.error("[KhmerAve RSS catalog error]", {
+        status: err.response?.status || null,
+        url: err.config?.url || null,
         message: err.message
       });
       return [];
@@ -651,9 +613,6 @@ async function getStream(prefix, seriesUrl, episode) {
     return null;
   }
 }
-
-testKhmerAveFeed();
-testKhmerAveMediaApi();
 
 module.exports = {
   getCatalogItems,
