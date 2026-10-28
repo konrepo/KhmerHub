@@ -53,10 +53,12 @@ async function testKhmerAveFeed() {
 }
 
 async function testKhmerAveMediaApi() {
-  for (const url of [
-    "https://www.khmeravenue.com/wp-json/wp/v2/album/269426",
-    "https://www.khmeravenue.com/wp-json/wp/v2/media/269427"
-  ]) {
+  const tests = [
+    ["album", "https://www.khmeravenue.com/wp-json/wp/v2/album/269426"],
+    ["media", "https://www.khmeravenue.com/wp-json/wp/v2/media/269427"]
+  ];
+
+  for (const [label, url] of tests) {
     try {
       const { data } = await axios.get(url, {
         headers: {
@@ -66,18 +68,17 @@ async function testKhmerAveMediaApi() {
         timeout: 15000
       });
 
-      console.log("[KhmerAve media API test]", {
-        url,
-        status: 200,
-        title: data.title?.rendered,
-        image: data.source_url || data.acf?.video_image
-      });
+      console.log(
+        `[KhmerAve ${label} test] OK`,
+        label === "album"
+          ? String(data?.title?.rendered || "no title")
+          : String(data?.source_url || "no image URL")
+      );
     } catch (err) {
-      console.error("[KhmerAve media API test]", {
-        url,
-        status: err.response?.status,
-        message: err.message
-      });
+      console.log(
+        `[KhmerAve ${label} test] FAILED`,
+        String(err.response?.status || err.code || err.message)
+      );
     }
   }
 }
