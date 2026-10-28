@@ -97,10 +97,18 @@ async function getCatalogItems(prefix, siteConfig, url) {
 
     return items;
   } catch (err) {
-    console.error("khmerave catalog error:", err.message);
+    console.error("[KhmerAve catalog]", {
+      status: err.response?.status,
+      url: err.config?.url,
+      server: err.response?.headers?.server,
+      contentType: err.response?.headers?.["content-type"],
+      body: typeof err.response?.data === "string"
+        ? err.response.data.slice(0, 500)
+        : ""
+    });
+
     return [];
   }
-}
 
 /* =========================
    EPISODES
