@@ -25,6 +25,34 @@ function posterFromStyle(style) {
   return m ? m[1].replace(/['"]/g, "") : "";
 }
 
+// TEMPORARY: Test whether Render can access the KhmerAvenue API.
+async function testKhmerAveApi() {
+  try {
+    const { data } = await axios.get(
+      "https://www.khmeravenue.com/wp-json/wp/v2/album?per_page=3",
+      {
+        headers: {
+          "User-Agent": UA_WIN,
+          Referer: "https://www.khmeravenue.com/"
+        },
+        timeout: 15000
+      }
+    );
+
+    console.log("[KhmerAve API test]", {
+      count: Array.isArray(data) ? data.length : "not an array",
+      firstTitle: data?.[0]?.title?.rendered,
+      firstImageId: data?.[0]?.acf?.video_image
+    });
+  } catch (err) {
+    console.error("[KhmerAve API test]", {
+      status: err.response?.status,
+      message: err.message
+    });
+  }
+}
+
+
 /* =========================
    EPISODE NUMBER HELPER
 ========================= */
@@ -462,6 +490,9 @@ async function getStream(prefix, seriesUrl, episode) {
     return null;
   }
 }
+
+// Temporary API connectivity test
+testKhmerAveApi();
 
 module.exports = {
   getCatalogItems,
