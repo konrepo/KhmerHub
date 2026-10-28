@@ -25,6 +25,33 @@ function posterFromStyle(style) {
   return m ? m[1].replace(/['"]/g, "") : "";
 }
 
+async function testKhmerAveFeed() {
+  try {
+    const { data } = await axios.get(
+      "https://www.khmeravenue.com/album/feed/",
+      {
+        headers: {
+          "User-Agent": UA_WIN,
+          Accept: "application/rss+xml, application/xml, text/xml, */*",
+          Referer: "https://www.khmeravenue.com/"
+        },
+        timeout: 15000
+      }
+    );
+
+    console.log("[KhmerAve RSS test]", {
+      isXml: typeof data === "string" && data.includes("<rss"),
+      hasMakeAWish:
+        typeof data === "string" && data.includes("Make a Wish")
+    });
+  } catch (err) {
+    console.error("[KhmerAve RSS test]", {
+      status: err.response?.status,
+      message: err.message
+    });
+  }
+}
+
 /* =========================
    EPISODE NUMBER HELPER
 ========================= */
@@ -593,6 +620,8 @@ async function getStream(prefix, seriesUrl, episode) {
     return null;
   }
 }
+
+testKhmerAveFeed();
 
 module.exports = {
   getCatalogItems,
