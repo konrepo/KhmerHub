@@ -1,6 +1,7 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 
+
 const UA_WIN =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36";
 const UA_MOB =
@@ -65,167 +66,7 @@ function extractEpisodeNumber(link, text = "") {
 /* =========================
    CATALOG
 ========================= */
-const KHMERAVE_API = "https://www.khmeravenue.com/wp-json/wp/v2";
-const KHMERAVE_ORIGIN = "https://www.khmeravenue.com";
-
-function parseKhmerAveCatalogRequest(url) {
-  const parsed = new URL(url);
-  const parts = parsed.pathname.split("/").filter(Boolean);
-  let page = 1;
-
-  const pageIndex = parts.findIndex(
-    (part, index) => part === "page" && /^\d+$/.test(parts[index + 1] || "")
-  );
-  if (pageIndex >= 0) page = Math.max(1, Number(parts[pageIndex + 1]) || 1);
-
-  const search = (parsed.searchParams.get("s") || parsed.searchParams.get("search") || "").trim();
-  let feedUrl;
-
-  if (search) {
-    const params = new URLSearchParams({
-      feed: "rss2",
-      post_type: "album",
-      s: search
-    });
-    feedUrl = `${KHMERAVE_ORIGIN}/?${params.toString()}`;
-  } else if (parts[0] === "album") {
-    feedUrl = `${KHMERAVE_ORIGIN}/album/feed/${page > 1 ? `?paged=${page}` : ""}`;
-  } else {
-    // WordPress taxonomy archive RSS; keeps genre requests within the requested taxonomy.
-    const archivePath = `/${parts.join("/")}${parts.length ? "/" : ""}`;
-    feedUrl = `${KHMERAVE_ORIGIN}${archivePath}feed/${page > 1 ? `?paged=${page}` : ""}`;
-  }
-
-  return { page, feedUrl };
-}
-
-function postIdFromRssItem($item, link) {
-  const guid = $item.find("guid").first().text().trim();
-  const text = `${guid} ${link || ""}`;
-  const match =
-    text.match(/[?&]p=(\d+)/i) ||
-    text.match(/\/album\/(\d+)(?:\/|$)/i);
-  return match ? Number(match[1]) : 0;
-}
-
-async function mapWithConcurrency(items, limit, mapper) {
-  const results = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
-      const index = next++;
-      if (index >= items.length) return;
-      results[index] = await mapper(items[index], index);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-async function getAlbumImageId(postId) {
-  if (!postId) return 0;
-  try {
-    const { data } = await axios.get(`${KHMERAVE_API}/album/${postId}`, {
-      headers: {
-        "User-Agent": UA_WIN,
-        Referer: `${KHMERAVE_ORIGIN}/`
-      },
-      timeout: 15000
-    });
-    const imageId = Number(data?.acf?.video_image);
-    return Number.isInteger(imageId) && imageId > 0 ? imageId : 0;
-  } catch (err) {
-    console.warn("[KhmerAve RSS] album metadata unavailable", {
-      postId,
-      status: err.response?.status || null,
-      message: err.message
-    });
-    return 0;
-  }
-}
-
-async function getMediaPoster(imageId) {
-  if (!imageId) return "";
-  try {
-    const { data } = await axios.get(`${KHMERAVE_API}/media/${imageId}`, {
-      headers: {
-        "User-Agent": UA_WIN,
-        Referer: `${KHMERAVE_ORIGIN}/`
-      },
-      timeout: 15000
-    });
-    const sizes = data?.media_details?.sizes || {};
-    return sizes.medium_large?.source_url ||
-      sizes.medium?.source_url ||
-      sizes.thumbnail?.source_url ||
-      data?.source_url ||
-      "";
-  } catch (err) {
-    console.warn("[KhmerAve RSS] poster unavailable", {
-      imageId,
-      status: err.response?.status || null,
-      message: err.message
-    });
-    return "";
-  }
-}
-
-async function getKhmerAveRssCatalogItems(url) {
-  const { feedUrl } = parseKhmerAveCatalogRequest(url);
-  const { data } = await axios.get(feedUrl, {
-    headers: {
-      "User-Agent": UA_WIN,
-      Accept: "application/rss+xml, application/xml, text/xml, */*",
-      Referer: `${KHMERAVE_ORIGIN}/`
-    },
-    timeout: 20000
-  });
-
-  const $ = cheerio.load(String(data || ""), { xmlMode: true });
-  const entries = $("channel > item").toArray().map((el) => {
-    const item = $(el);
-    const title = cleanTitle(item.find("title").first().text());
-    const link = item.find("link").first().text().trim();
-    const postId = postIdFromRssItem(item, link);
-    return { title, link, postId };
-  }).filter((item) => item.title && item.link);
-
-  // Resolve image IDs with a small concurrency limit to avoid bursts of requests.
-  const withImageIds = await mapWithConcurrency(entries, 3, async (entry) => ({
-    ...entry,
-    imageId: await getAlbumImageId(entry.postId)
-  }));
-  const withPosters = await mapWithConcurrency(withImageIds, 3, async (entry) => ({
-    ...entry,
-    poster: await getMediaPoster(entry.imageId)
-  }));
-
-  return withPosters.map((item) => ({
-    id: `khmerave:${encodeURIComponent(item.link)}`,
-    name: item.title,
-    poster: item.poster,
-    background: item.poster
-  }));
-}
-
 async function getCatalogItems(prefix, siteConfig, url) {
-  // KhmerAvenue's public RSS and individual WordPress API records are accessible from Render,
-  // while its HTML archive and API collection can return Cloudflare 403 responses.
-  if (prefix === "khmerave") {
-    try {
-      const items = await getKhmerAveRssCatalogItems(url);
-      console.log("[KhmerAve RSS catalog]", { count: items.length, url });
-      return items;
-    } catch (err) {
-      console.error("[KhmerAve RSS catalog error]", {
-        status: err.response?.status || null,
-        url: err.config?.url || null,
-        message: err.message
-      });
-      return [];
-    }
-  }
-
   try {
     const { data } = await axios.get(url, {
       headers: { "User-Agent": UA_WIN, Referer: referer(prefix) },
@@ -619,3 +460,4 @@ module.exports = {
   getEpisodes,
   getStream,
 };
+
