@@ -1,6 +1,7 @@
 const TYPES = ["series", "movie", "channel"];
 const EXTRA = ["search", "skip"];
 const config = require("./sites/config");
+const KHMERAVE_GENRES_ENABLED = false;
 
 const sites = [
   { id: "khmertv", name: "KhmerTV", type: "channel", enabled: true }, 
@@ -69,15 +70,26 @@ module.exports = {
       }	
 
       if (site.id === "khmerave") {
+        const extra = [
+          { name: "search", isRequired: false },
+          { name: "skip", isRequired: false }
+        ];
+
+        // Hide KhmerAve genres while using GitHub JSON.
+        // Change KHMERAVE_GENRES_ENABLED to true to restore them.
+        if (KHMERAVE_GENRES_ENABLED) {
+          extra.push({
+            name: "genre",
+            isRequired: false,
+            options: ["Classic", "HK", "Chinese", "Modern", "China", "Korean", "Kon"]
+          });
+        }
+
         return {
           type: site.type,
           id: site.id,
           name: site.name,
-          extra: [
-            { name: "search", isRequired: false },
-            { name: "skip", isRequired: false },
-            { name: "genre", isRequired: false, options: ["Classic", "HK", "Chinese", "Modern", "China", "Korean", "Kon"] }
-          ]
+          extra
         };
       }
 

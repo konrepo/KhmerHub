@@ -81,11 +81,11 @@ module.exports = (builder, deps) => {
       }	  
 	  
       if (extra?.search && (id === "khmerave" || id === "merlkon")) {
-        const keyword = encodeURIComponent(extra.search);
+        const keyword = String(extra.search || "").trim();
 
         const url = id === "merlkon"
-          ? `https://www.khmerdrama.com/?s=${keyword}`
-          : `https://www.khmeravenue.com/?s=${keyword}`;
+          ? `https://www.khmerdrama.com/?s=${encodeURIComponent(keyword)}`
+          : `github-search:${keyword}`;
 
         const items = await siteEngine.getCatalogItems(id, site, url);
 

@@ -1,6 +1,75 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 
+/* =========================
+   KHMERAVE GITHUB DATA
+   KhmerAve only. Merlkon keeps the original live code.
+========================= */
+const KHMERAVE_CATALOG_URL =
+  "https://raw.githubusercontent.com/konrepo/KhmerKodi/main/data/khmerave-catalog.json";
+const KHMERAVE_CACHE_URL =
+  "https://raw.githubusercontent.com/konrepo/KhmerKodi/main/data/khmerave-cache.json";
+
+const KHMERAVE_DATA_TTL = 5 * 60 * 1000;
+
+let khmerAveCatalogData = null;
+let khmerAveCatalogLoadedAt = 0;
+let khmerAveCacheData = null;
+let khmerAveCacheLoadedAt = 0;
+
+async function getKhmerAveCatalogData() {
+  const now = Date.now();
+
+  if (
+    khmerAveCatalogData &&
+    now - khmerAveCatalogLoadedAt < KHMERAVE_DATA_TTL
+  ) {
+    return khmerAveCatalogData;
+  }
+
+  const { data } = await axios.get(KHMERAVE_CATALOG_URL, {
+    timeout: 15000,
+    headers: { "User-Agent": UA_WIN }
+  });
+
+  khmerAveCatalogData = data;
+  khmerAveCatalogLoadedAt = now;
+  return data;
+}
+
+async function getKhmerAveCacheData() {
+  const now = Date.now();
+
+  if (
+    khmerAveCacheData &&
+    now - khmerAveCacheLoadedAt < KHMERAVE_DATA_TTL
+  ) {
+    return khmerAveCacheData;
+  }
+
+  const { data } = await axios.get(KHMERAVE_CACHE_URL, {
+    timeout: 30000,
+    headers: { "User-Agent": UA_WIN }
+  });
+
+  khmerAveCacheData = data;
+  khmerAveCacheLoadedAt = now;
+  return data;
+}
+
+function normalizeSeriesUrl(url) {
+  return String(url || "").trim().replace(/\/+$/, "");
+}
+
+function findKhmerAveCachedShow(data, seriesUrl) {
+  const target = normalizeSeriesUrl(seriesUrl);
+
+  return (data?.shows || []).find(
+    show => normalizeSeriesUrl(show?.url) === target
+  );
+}
+
+
 
 const UA_WIN =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36";
@@ -68,6 +137,43 @@ function extractEpisodeNumber(link, text = "") {
 ========================= */
 async function getCatalogItems(prefix, siteConfig, url) {
   try {
+    if (prefix === "khmerave") {
+      const catalog = await getKhmerAveCatalogData();
+      const shows = Array.isArray(catalog?.shows) ? catalog.shows : [];
+
+      if (String(url || "").startsWith("github-search:")) {
+        const query = String(url)
+          .slice("github-search:".length)
+          .trim()
+          .toLowerCase();
+
+        if (!query) return [];
+
+        return shows
+          .filter(show =>
+            String(show?.title || "").toLowerCase().includes(query)
+          )
+          .slice(0, 54)
+          .map(show => ({
+            id: `khmerave:${encodeURIComponent(show.url)}`,
+            name: cleanTitle(show.title),
+            poster: show.poster || ""
+          }));
+      }
+
+      let page = 1;
+      const pageMatch = String(url || "").match(/\/page\/(\d+)\/?/i);
+      if (pageMatch) page = Number(pageMatch[1]) || 1;
+
+      return shows
+        .filter(show => Number(show?.page || 1) === page)
+        .map(show => ({
+          id: `khmerave:${encodeURIComponent(show.url)}`,
+          name: cleanTitle(show.title),
+          poster: show.poster || ""
+        }));
+    }
+
     const { data } = await axios.get(url, {
       headers: { "User-Agent": UA_WIN, Referer: referer(prefix) },
       timeout: 15000,
@@ -108,6 +214,40 @@ async function getCatalogItems(prefix, siteConfig, url) {
 ========================= */
 async function getEpisodes(prefix, seriesUrl) {
   try {
+    if (prefix === "khmerave") {
+      const cache = await getKhmerAveCacheData();
+      const show = findKhmerAveCachedShow(cache, seriesUrl);
+
+      if (!show) return [];
+
+      const episodes = Array.isArray(show.episodes) ? show.episodes : [];
+      const seen = new Set();
+
+      return episodes
+        .map((ep, index) => ({
+          ep,
+          epNumber:
+            extractEpisodeNumber(ep.page || seriesUrl, ep.title || "") ||
+            index + 1
+        }))
+        .filter(({ ep, epNumber }) => {
+          if (!ep?.ok) return false;
+          if (seen.has(epNumber)) return false;
+          seen.add(epNumber);
+          return true;
+        })
+        .sort((a, b) => a.epNumber - b.epNumber)
+        .map(({ epNumber }) => ({
+          id: `khmerave:${encodeURIComponent(seriesUrl)}:1:${epNumber}`,
+          title: `Episode ${String(epNumber).padStart(2, "0")}`,
+          seriesTitle: show.title || seriesUrl,
+          season: 1,
+          episode: epNumber,
+          thumbnail: show.poster || "",
+          released: new Date().toISOString()
+        }));
+    }
+
     const { data } = await axios.get(seriesUrl, {
       headers: { "User-Agent": UA_MOB, Referer: referer(prefix) },
       timeout: 15000,
@@ -368,6 +508,44 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
 
 async function getStream(prefix, seriesUrl, episode) {
   try {
+    if (prefix === "khmerave") {
+      const cache = await getKhmerAveCacheData();
+      const show = findKhmerAveCachedShow(cache, seriesUrl);
+
+      if (!show) return null;
+
+      const episodes = Array.isArray(show.episodes) ? show.episodes : [];
+
+      const target = episodes.find((ep, index) => {
+        const epNumber =
+          extractEpisodeNumber(ep.page || seriesUrl, ep.title || "") ||
+          index + 1;
+
+        return epNumber === Number(episode);
+      });
+
+      if (!target?.ok) return null;
+
+      const direct = await resolveOkRuToDirect(target.ok, UA_MOB);
+      if (!direct) return null;
+
+      return {
+        name: "KhmerAve",
+        title: `Episode ${String(episode).padStart(2, "0")}`,
+        url: direct,
+        behaviorHints: {
+          group: "khmerave",
+          notWebReady: true,
+          proxyHeaders: {
+            request: {
+              Referer: "https://ok.ru/",
+              "User-Agent": UA_MOB
+            }
+          }
+        }
+      };
+    }
+
     const providerNames = {
       khmerave: "KhmerAve",
       merlkon: "Merlkon"
