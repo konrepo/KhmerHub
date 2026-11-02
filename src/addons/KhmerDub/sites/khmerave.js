@@ -10,12 +10,21 @@ const KHMERAVE_CATALOG_URL =
 const KHMERAVE_CACHE_URL =
   "https://raw.githubusercontent.com/konrepo/KhmerKodi/main/data/khmerave-cache.json";
 
+const MERLKON_CATALOG_URL =
+  "https://raw.githubusercontent.com/konrepo/KhmerKodi/main/data/merlkon-catalog.json";
+const MERLKON_CACHE_URL =
+  "https://raw.githubusercontent.com/konrepo/KhmerKodi/main/data/merlkon-cache.json";
+
 const KHMERAVE_DATA_TTL = 5 * 60 * 1000;
 
 let khmerAveCatalogData = null;
 let khmerAveCatalogLoadedAt = 0;
 let khmerAveCacheData = null;
 let khmerAveCacheLoadedAt = 0;
+let merlkonCatalogData = null;
+let merlkonCatalogLoadedAt = 0;
+let merlkonCacheData = null;
+let merlkonCacheLoadedAt = 0;
 
 async function getKhmerAveCatalogData() {
   const now = Date.now();
@@ -57,11 +66,56 @@ async function getKhmerAveCacheData() {
   return data;
 }
 
+
+async function getMerlkonCatalogData() {
+  const now = Date.now();
+  if (merlkonCatalogData && now - merlkonCatalogLoadedAt < KHMERAVE_DATA_TTL) {
+    return merlkonCatalogData;
+  }
+
+  const { data } = await axios.get(MERLKON_CATALOG_URL, {
+    timeout: 15000,
+    headers: { "User-Agent": UA_WIN }
+  });
+
+  merlkonCatalogData = data;
+  merlkonCatalogLoadedAt = now;
+  return data;
+}
+
+async function getMerlkonCacheData() {
+  const now = Date.now();
+  if (merlkonCacheData && now - merlkonCacheLoadedAt < KHMERAVE_DATA_TTL) {
+    return merlkonCacheData;
+  }
+
+  const { data } = await axios.get(MERLKON_CACHE_URL, {
+    timeout: 30000,
+    headers: { "User-Agent": UA_WIN }
+  });
+
+  merlkonCacheData = data;
+  merlkonCacheLoadedAt = now;
+  return data;
+}
+
+async function getCachedCatalogData(prefix) {
+  return prefix === "merlkon"
+    ? getMerlkonCatalogData()
+    : getKhmerAveCatalogData();
+}
+
+async function getCachedEpisodeData(prefix) {
+  return prefix === "merlkon"
+    ? getMerlkonCacheData()
+    : getKhmerAveCacheData();
+}
+
 function normalizeSeriesUrl(url) {
   return String(url || "").trim().replace(/\/+$/, "");
 }
 
-function findKhmerAveCachedShow(data, seriesUrl) {
+function findCachedShow(data, seriesUrl) {
   const target = normalizeSeriesUrl(seriesUrl);
 
   return (data?.shows || []).find(
@@ -137,8 +191,8 @@ function extractEpisodeNumber(link, text = "") {
 ========================= */
 async function getCatalogItems(prefix, siteConfig, url) {
   try {
-    if (prefix === "khmerave") {
-      const catalog = await getKhmerAveCatalogData();
+    if (prefix === "khmerave" || prefix === "merlkon") {
+      const catalog = await getCachedCatalogData(prefix);
       const shows = Array.isArray(catalog?.shows) ? catalog.shows : [];
 
       if (String(url || "").startsWith("github-search:")) {
@@ -155,7 +209,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
           )
           .slice(0, 54)
           .map(show => ({
-            id: `khmerave:${encodeURIComponent(show.url)}`,
+            id: `${prefix}:${encodeURIComponent(show.url)}`,
             name: cleanTitle(show.title),
             poster: show.poster || ""
           }));
@@ -168,7 +222,7 @@ async function getCatalogItems(prefix, siteConfig, url) {
       return shows
         .filter(show => Number(show?.page || 1) === page)
         .map(show => ({
-          id: `khmerave:${encodeURIComponent(show.url)}`,
+          id: `${prefix}:${encodeURIComponent(show.url)}`,
           name: cleanTitle(show.title),
           poster: show.poster || ""
         }));
@@ -214,9 +268,9 @@ async function getCatalogItems(prefix, siteConfig, url) {
 ========================= */
 async function getEpisodes(prefix, seriesUrl) {
   try {
-    if (prefix === "khmerave") {
-      const cache = await getKhmerAveCacheData();
-      const show = findKhmerAveCachedShow(cache, seriesUrl);
+    if (prefix === "khmerave" || prefix === "merlkon") {
+      const cache = await getCachedEpisodeData(prefix);
+      const show = findCachedShow(cache, seriesUrl);
 
       if (!show) return [];
 
@@ -238,7 +292,7 @@ async function getEpisodes(prefix, seriesUrl) {
         })
         .sort((a, b) => a.epNumber - b.epNumber)
         .map(({ epNumber }) => ({
-          id: `khmerave:${encodeURIComponent(seriesUrl)}:1:${epNumber}`,
+          id: `${prefix}:${encodeURIComponent(seriesUrl)}:1:${epNumber}`,
           title: `Episode ${String(epNumber).padStart(2, "0")}`,
           seriesTitle: show.title || seriesUrl,
           season: 1,
@@ -508,9 +562,9 @@ async function resolveOkRuToDirect(iframeUrl, ua) {
 
 async function getStream(prefix, seriesUrl, episode) {
   try {
-    if (prefix === "khmerave") {
-      const cache = await getKhmerAveCacheData();
-      const show = findKhmerAveCachedShow(cache, seriesUrl);
+    if (prefix === "khmerave" || prefix === "merlkon") {
+      const cache = await getCachedEpisodeData(prefix);
+      const show = findCachedShow(cache, seriesUrl);
 
       if (!show) return null;
 
@@ -530,11 +584,11 @@ async function getStream(prefix, seriesUrl, episode) {
       if (!direct) return null;
 
       return {
-        name: "KhmerAve",
+        name: prefix === "merlkon" ? "Merlkon" : "KhmerAve",
         title: `Episode ${String(episode).padStart(2, "0")}`,
         url: direct,
         behaviorHints: {
-          group: "khmerave",
+          group: prefix,
           notWebReady: true,
           proxyHeaders: {
             request: {

@@ -2,6 +2,7 @@ const TYPES = ["series", "movie", "channel"];
 const EXTRA = ["search", "skip"];
 const config = require("./sites/config");
 const KHMERAVE_GENRES_ENABLED = false;
+const MERLKON_GENRES_ENABLED = false;
 
 const sites = [
   { id: "khmertv", name: "KhmerTV", type: "channel", enabled: true }, 
@@ -94,15 +95,26 @@ module.exports = {
       }
 
       if (site.id === "merlkon") {
+        const extra = [
+          { name: "search", isRequired: false },
+          { name: "skip", isRequired: false }
+        ];
+
+        // Hide Merlkon genres while using GitHub JSON.
+        // Change MERLKON_GENRES_ENABLED to true to restore them.
+        if (MERLKON_GENRES_ENABLED) {
+          extra.push({
+            name: "genre",
+            isRequired: false,
+            options: ["Khmer", "Thai", "Indian", "Philippines", "Boran", "Horror", "Kon"]
+          });
+        }
+
         return {
           type: site.type,
           id: site.id,
           name: site.name,
-          extra: [
-            { name: "search", isRequired: false },
-            { name: "skip", isRequired: false },
-            { name: "genre", isRequired: false, options: ["Khmer", "Thai", "Indian", "Philippines", "Boran", "Horror", "Kon"] }
-          ]
+          extra
         };
       }
 	  
